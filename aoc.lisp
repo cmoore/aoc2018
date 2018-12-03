@@ -10,11 +10,10 @@
 (defun day-2 (&key (result-table (make-hash-table)) (result 0))
   (dolist (current (ppcre:split "\\n" *day-1-input*))
     (let ((temp-result (+ result (read-from-string current))))
-      (if (gethash temp-result result-table)
-          (return-from day-2 temp-result)
-          (progn
-            (setf (gethash temp-result result-table) 1)
-            (setf result temp-result)))))
+      (when (gethash temp-result result-table)
+        (return-from day-2 temp-result))
+      (setf (gethash temp-result result-table) 1)
+      (setf result temp-result)))
   (day-2 :result-table result-table :result result))
 
 (defun day-2-2 ()
