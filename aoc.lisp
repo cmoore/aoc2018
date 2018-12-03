@@ -1,5 +1,12 @@
 
-(ql:quickload :alexandria)
+(ql:quickload '(:alexandria
+                :cl-ppcre))
+
+(defpackage :aoc
+  (:use :cl
+        :alexandria))
+
+(in-package :aoc)
 
 (defun day-1 ()
   (let ((result 0))
@@ -45,7 +52,6 @@
           (setf threes (+ threes box-threes))))
       (* twos threes))))
 
-
 (defun day-2-similar-box-ids ()
   (flet ((box-id-sort-fn (a b result-table)
            (let ((a-list (coerce a 'list))
@@ -68,6 +74,70 @@
       (let ((highest-score (car (sort (alexandria:hash-table-keys result-table) #'>))))
         (gethash highest-score result-table)))))
 
+(defun parse-line (line)
+  (declare (optimize (debug 3)))
+  (destructuring-bind (pattern at start-end dims)
+      (ppcre:split " " line)
+    (declare (ignore at))
+    (let ((edges (ppcre:split "," (car (ppcre:split ":" start-end))))
+          (dimensions (ppcre:split "x" dims)))
+      (list pattern
+            (read-from-string (car edges))
+            (read-from-string (cadr edges))
+            (read-from-string (car dimensions))
+            (read-from-string (cadr dimensions))))))
+
+(defun set-pattern (pattern top-edge left-edge width height fabric)
+  (declare (optimize (debug 3))
+           (type string pattern))
+  (dotimes (left-count height)
+    (dotimes (top-count width)
+      (let ((left (+ left-edge left-count))
+            (top (+ top-edge top-count)))
+        (if (typep (aref fabric left top) 'string )
+            ;; It's already been set once, so now we're overlapping
+            (setf (aref fabric left top) "X")
+            ;; First visit to this slot.
+            (setf (aref fabric left top) pattern))))))
+
+(defun day3-1 ()
+  (let ((fabric (make-array '(1001 1001) :initial-element 0 :adjustable t)))
+    (dolist (line (ppcre:split "\\n" (alexandria:read-file-into-string "elf-tailors.txt")))
+      (destructuring-bind (pattern left top width height)
+          (parse-line line)
+        (set-pattern pattern left top width height fabric)))
+    (length
+     (remove-if-not (lambda (slot)
+                      (and (stringp slot)
+                           (string= slot "X")))
+                    (coerce (aops:flatten fabric) 'list)))))
+
+(defun scan-pattern (pattern top-edge left-edge width height fabric)
+  (dotimes (left-count height)
+    (dotimes (top-count width)
+      (let ((left (+ left-edge left-count))
+            (top (+ top-edge top-count)))
+        (unless (and (typep (aref fabric left top) 'string )
+                     (string= (aref fabric left top) pattern))
+          (return-from scan-pattern nil)))))
+  pattern)
+
+(defun day3-2 ()
+  (let ((lines (ppcre:split "\\n" (alexandria:read-file-into-string "elf-tailors.txt")))
+        (fabric (make-array '(1001 1001) :initial-element 0 :adjustable t)))
+    (dolist (line lines)
+      (destructuring-bind (pattern left top width height)
+          (parse-line line)
+        (set-pattern pattern left top width height fabric)))
+    ;; ewww... but hey, I'm kinda tired.
+    ;; I'll fix this tomorrow while I wait
+    ;; for the next challenge.
+    (remove-if #'null
+               (mapcar (lambda (line)
+                         (destructuring-bind (pattern left top width height)
+                             (parse-line line)
+                           (scan-pattern pattern left top width height fabric)))
+                       lines))))
 
 (defvar *day-2-input* "ybruvapdgixszyckwtfqjonsie
 mbruvapxghslyyckwtfqjonsie
