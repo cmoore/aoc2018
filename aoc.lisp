@@ -1,6 +1,12 @@
 
+
+;;
+;; Yea, I don't like loop.  It's true.
+;;
+
 (ql:quickload '(:alexandria
-                :cl-ppcre))
+                :cl-ppcre
+                :array-operations))
 
 (defpackage :aoc
   (:use :cl
@@ -8,14 +14,17 @@
 
 (in-package :aoc)
 
+(defun read-aoc-data (file)
+  (ppcre:split "\\n" (alexandria:read-file-into-string file)))
+
 (defun day-1 ()
   (let ((result 0))
-    (dolist (current (ppcre:split "\\n" *day-1-input*))
+    (dolist (current (read-aoc-data "day1.txt"))
       (setf result (+ result (read-from-string current))))
     result))
 
 (defun day-2 (&key (result-table (make-hash-table)) (result 0))
-  (dolist (current (ppcre:split "\\n" *day-1-input*))
+  (dolist (current (read-aoc-data "day1.txt"))
     (let ((temp-result (+ result (read-from-string current))))
       (when (gethash temp-result result-table)
         (return-from day-2 temp-result))
@@ -41,7 +50,7 @@
                (list two-counts three-counts)))))
     (let ((twos 0)
           (threes 0))
-      (dolist (box-code (ppcre:split "\\n" *day-2-input*))
+      (dolist (box-code (read-aoc-data "day2.txt"))
         (destructuring-bind (box-twos box-threes)
             (score-for-box-code box-code)
           (when (< 1 box-twos)
@@ -66,7 +75,7 @@
                  (setf common (format nil "~a~a" common (nth pos b-list)))))
              (when (< 0 score)
                (setf (gethash score result-table) common)))))
-    (let ((full-list (ppcre:split "\\n" *day-2-input*))
+    (let ((full-list (read-aoc-data "day2.txt"))
           (result-table (make-hash-table)))
       (dolist (box-code full-list)
         (dolist (b-list full-list)
@@ -102,7 +111,7 @@
 
 (defun day3-1 ()
   (let ((fabric (make-array '(1001 1001) :initial-element 0 :adjustable t)))
-    (dolist (line (ppcre:split "\\n" (alexandria:read-file-into-string "elf-tailors.txt")))
+    (dolist (line (read-aoc-data "elf-tailors.txt"))
       (destructuring-bind (pattern left top width height)
           (parse-line line)
         (set-pattern pattern left top width height fabric)))
@@ -130,12 +139,10 @@
           (parse-line line)
         (set-pattern pattern left top width height fabric)))
     ;; ewww... but hey, I'm kinda tired.
-    ;; I'll fix this tomorrow while I wait
-    ;; for the next challenge.
+    ;; I'll fix this tomorrow while I wait for the next challenge.
     (remove-if #'null
                (mapcar (lambda (line)
                          (destructuring-bind (pattern left top width height)
                              (parse-line line)
                            (scan-pattern pattern left top width height fabric)))
                        lines))))
-
