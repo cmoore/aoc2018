@@ -66,9 +66,9 @@
       (dolist (box-code full-list)
         (dolist (b-list full-list)
           (box-id-sort-fn box-code b-list result-table)))
-
       (let ((highest-score (car (sort (alexandria:hash-table-keys result-table) #'>))))
         (gethash highest-score result-table)))))
+
 
 (defvar *day-2-input* "ybruvapdgixszyckwtfqjonsie
 mbruvapxghslyyckwtfqjonsie
