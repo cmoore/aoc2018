@@ -1,4 +1,6 @@
 
+(ql:quickload :alexandria)
+
 (defun day-1 ()
   (let ((result 0))
     (dolist (current (ppcre:split "\\n" *day-1-input*))
@@ -14,6 +16,310 @@
             (setf (gethash temp-result result-table) 1)
             (setf result temp-result)))))
   (day-2 :result-table result-table :result result))
+
+(defun day-2-2 ()
+  (flet ((score-for-box-code (box-code)
+           (let ((tmp-result-table (make-hash-table :test 'equal)))
+             (dolist (character (coerce box-code 'list))
+               (if (gethash character tmp-result-table)
+                   (let ((count (gethash character tmp-result-table)))
+                     (setf (gethash character tmp-result-table) (+ count 1)))
+                   (setf (gethash character tmp-result-table) 1)))
+             (let ((two-counts 0)
+                   (three-counts 0))
+               (dolist (key (alexandria:hash-table-keys tmp-result-table))
+                 (when (= (gethash key tmp-result-table) 2)
+                   (setf two-counts (+ two-counts 1)))
+                 (when (= (gethash key tmp-result-table) 3)
+                   (setf three-counts (+ three-counts 1))))
+               (list two-counts three-counts)))))
+    (let ((twos 0)
+          (threes 0))
+      (dolist (box-code (ppcre:split "\\n" *day-2-input*))
+        (destructuring-bind (box-twos box-threes)
+            (score-for-box-code box-code)
+          (when (< 1 box-twos)
+            (setf box-twos 1))
+          (when (< 1 box-threes)
+            (setf box-threes 1))
+          (setf twos (+ twos box-twos))
+          (setf threes (+ threes box-threes))))
+      (* twos threes))))
+
+
+(defun day-2-similar-box-ids ()
+  (flet ((box-id-sort-fn (a b result-table)
+           (let ((a-list (coerce a 'list))
+                 (b-list (coerce b 'list))
+                 (score 0)
+                 (common ""))
+             (when (string= a b)
+               (return-from box-id-sort-fn (values 0 "" "" "")))
+             (dotimes (pos (length a-list))
+               (when (string= (nth pos a-list) (nth pos b-list))
+                 (setf score (+ score 1))
+                 (setf common (format nil "~a~a" common (nth pos b-list)))))
+             (when (< 0 score)
+               (setf (gethash score result-table) common)))))
+    (let ((full-list (ppcre:split "\\n" *day-2-input*))
+          (result-table (make-hash-table)))
+      (dolist (box-code full-list)
+        (dolist (b-list full-list)
+          (box-id-sort-fn box-code b-list result-table)))
+
+      (let ((highest-score (car (sort (alexandria:hash-table-keys result-table) #'>))))
+        (gethash highest-score result-table)))))
+
+(defvar *day-2-input* "ybruvapdgixszyckwtfqjonsie
+mbruvapxghslyyckwtfqjonsie
+mbruvapdghslzyckwtkujonsie
+rwruvapdghxlzyckwtfqjcnsie
+obruvapdgtxlzyckwtfqionsie
+lbruvapdghxqzyckwtfqjfnsie
+mbrunapdghxlzyccatfqjonsie
+mbruvapdghxlzyokltfqjdnsie
+ybruvapdghxlzmckwtfqjmnsie
+mbruwaadghxdzyckwtfqjonsie
+muruvapdghxlzyckvtfqjonsim
+mbruvapdghxlkyckwtxqjonjie
+mbruvaqdghxlzyckwtfqjrnnie
+mwruvapdghdlzyckttfqjonsie
+mbruvapdgtelzyckwxfqjonsie
+mbruvapdohxlzvckwtfqjonhie
+mbrugapdgbxlzyckwtfqjynsie
+mbruvapdghxlzyckwtlqjonjiu
+mbruvapwghxlzyckwafqjonbie
+wbruvapdghxlhyckwtfqjonsii
+mbruvapdghxlzyckwtcqnonsiq
+mbyuvapighxlzybkwtfqjonsie
+mbrrvapdghxvzyckwtfqjonsio
+mhruvapdghrlzyckwtfzjonsie
+mtruvapvghxlzyckwtfnjonsie
+mmrlhapdghxlzyckwtfqjonsie
+mbruvapdgpxlzyjkwtfqjovsie
+mbrucapdghxlzymkwtzqjonsie
+mbeuvafdghxlzyckwtfqjonwie
+mbruvapcghxlayckwtfqjonsii
+mbruvabdghxlzyckwtfqyansie
+mbruvjpdghxlzyckwtfqgfnsie
+lbruvapdghxlzyckwtfqjonriv
+mbrupapdghxlzycjwtfqronsie
+mbpuvapdthxlzymkwtfqjonsie
+mbiuvapdgixlzyckwxfqjonsie
+mbruvapdghxyzyckwtfcjonsbe
+mbrurapkghxlzyckwtfqjonzie
+mbrufapdrhxlzyciwtfqjonsie
+mbruvapdghxlzbckwtfqjoisae
+ubruhapdghxlzuckwtfqjonsie
+mbruvapdjhulzyckwtfqjonshe
+mbruwapdgyxlzyckntfqjonsie
+mwruvapdghplzyckwtfqjonsme
+mbruvapjghtlzyckwtfqgonsie
+pbruvapdghhlzyckwtfrjonsie
+mbruvgpdihxqzyckwtfqjonsie
+mbruvahdohxlzyckwtfijonsie
+ibuuvapdghxlzyckwtfqjofsie
+mbruvandghxlzyckwtfqjrnxie
+mbrjvlpdghxlzyckwgfqjonsie
+mbruvapogfxlzyckotfqjonsie
+mbruvrpdghxlzyckutfejonsie
+mbruvbpdghxlzyhkwtfqjonsip
+mbruvapdghxlzyckmnfqjensie
+mbruvapdghvlzyckwtfqjowsix
+mbruvakdgholzwckwtfqjonsie
+mbruvapdghxlzackwtfqconsae
+mbruvapdghxlzyqvwtfqjlnsie
+mprrvapdgfxlzyckwtfqjonsie
+mbrunacdghxlhyckwtfqjonsie
+obruvapdgsxlzyckwtfqjonvie
+murcvapdghslzyckwtfqjonsie
+mbruvapdghxlzyzkwmftjonsie
+mbrwvapdgtvlzyckwtfqjonsie
+mbxuvapdghxlzqcnwtfqjonsie
+mbruvaddghxboyckwtfqjonsie
+mhruvwndghxlzyckwtfqjonsie
+mbrdvapdghxlzyckwmpqjonsie
+mbruvapdgyxlzyckizfqjonsie
+mbruvapdghxlzlckwtfqeowsie
+mbruvbpdgrxlzyckwtfqjonsxe
+mbruqapoghxlzyckwtvqjonsie
+mbouhapdghmlzyckwtfqjonsie
+mbruvapjghxidyckwtfqjonsie
+mbsuvapkghxlkyckwtfqjonsie
+mbruvlpdghxlzycrwtfqjonsis
+mcrueapdghxlzyckwtfqjynsie
+muruvapngbxlzyckwtfqjonsie
+mbruvapdghxlzycawtfyjojsie
+mbruvbpdghxczyjkwtfqjonsie
+ybduvapdghxnzyckwtfqjonsie
+mbruvbpdghxlzyckwtfbjousie
+mbouvapdghxlzycbwtfqponsie
+mbruvaedghplzycgwtfqjonsie
+mbrhvapdghxlzyckytfqjgnsie
+mbruvapdqbxleyckwtfqjonsie
+mbruvapddhhldyckwtfqjonsie
+mbruvapdghxlwrckwtfqjondie
+mbruvapdmhxlzyckwtfqkonsve
+xbbuvapdghxlzyckwtfkjonsie
+mbruvapdghxlzyckwcfqjunkie
+mbruvapdghxlzyckwtfqxonfib
+mbrtvapkghxlzyckwtfqeonsie
+mbruvazdghxldymkwtfqjonsie
+kbruvapddhxlzfckwtfqjonsie
+mbouvapdghxlpyckwtfqjoosie
+mbauvapdghxlzyckwtfqjszsie
+mbruvapdghtlzyckntfqtonsie
+mbruvipdggxlzbckwtfqjonsie
+mbruqapdghrlzyckwtfqjznsie
+myruvacdghxlzyckwifqjonsie
+mbruvapdghxlzuckwtfkjocsie
+mwjuvapdghxlzyckwtfqjonsxe
+mbruvapxghxlzickwtfqjobsie
+mbrupapdghxtlyckwtfqjonsie
+meruvapdjjxlzyckwtfqjonsie
+mbruvkodghxlzyckwofqjonsie
+mbruvapdgexlzyckwtgkjonsie
+mbruvapwghxlzyckwtcqjonsiw
+mbruvapdghxlzykkwtfqtoxsie
+mbruvapdahxlzycgwtfwjonsie
+mbruvapdgwxlhyckhtfqjonsie
+mbruvapbghxlzycbhmfqjonsie
+mbruvapdghxvzyzkwtfqjonsin
+mbrcvapdqhxlzyckwyfqjonsie
+zbruvaxdghxlzyckwgfqjonsie
+mtruvapdghxlilckwtfqjonsie
+bbruvapdghxlzyckwtfmjonsxe
+mbruvajdghxlzyckwtfqfwnsie
+mbruvapdgkxlzyckwtfqionpie
+rbruvapdghxlryckwdfqjonsie
+mbruvandghxlzyckwmfvjonsie
+mbruvahdghxlzeckwtfqjonsme
+mbruvnpcghxlzyckwtfqjobsie
+mbruvapdghqlzyckwtfbjonsiy
+mbruvavdghxlzyckwufqjodsie
+mbruvapdghxlzyckwtfzmovsie
+mbruvlpdghxuzyckwtfqjoesie
+mbruvopdghxlzycwwtfqjansie
+obruvapdghglzybkwtfqjonsie
+mbpuvlpdghxlcyckwtfqjonsie
+mbruvaidghxlzyckwtfmjonoie
+mbruvapdihxzzyckwtfqjonsiy
+mbquvapdghxlzyckwtfqconsme
+mbruvapdghslzyckqtfqjojsie
+mbrzdapdghxmzyckwtfqjonsie
+mwruvapdghxozyckwtfqjonsxe
+muruvapdgfxlzyckwtfqjojsie
+wtruvapdghxlzyckvtfqjonsie
+mbruvapdghxlzyckysfqjxnsie
+mbruvrpdghxczyckktfqjonsie
+mbquvapdghxlryckwtfqjonsne
+mbruvapdghflzycvwtfqjpnsie
+mbruvapughclzyckwtfqjonsin
+mbrhvapdghxlpyckwtfqjonsre
+mbruvapdgtxlzyckwtfqjoosit
+mbrupapnghxhzyckwtfqjonsie
+mmvuvapdvhxlzyckwtfqjonsie
+mbruvaptghxlzyckwtfqjotsse
+mgruvapvghxlzyckwtfqjonsix
+mbrupapdghxszyckwtfqjunsie
+mbruvkpdghelzyckwtfqjpnsie
+mbruvrrdghjlzyckwtfqjonsie
+mbruvapdghnlzyckwtfkjonsze
+mbruvwpdghxlzyckwtfqhoysie
+mbrsvapdfhxlzyckwtfqjobsie
+mbruvapdgexezymkwtfqjonsie
+ybruvapdghxlzyckwtfqxonsiw
+mrruvapdghxdzyckwtfqjossie
+mbruvapdghtlzyckwtfqconsiu
+mbrpvapdghxlzlckwpfqjonsie
+mbruvjpdghslzyckwtfqjjnsie
+mhruvapoghxlzyckwtfvjonsie
+mbrubqpdghvlzyckwtfqjonsie
+mbruvapdghxlzackwtfqconsiw
+mbruvapdgnxlzkckwtfqjdnsie
+mbrudapgghelzyckwtfqjonsie
+mbruvapdghxlzlakwbfqjonsie
+mbpuvapdghxlzyckwtuqjonjie
+abruvapdghxlzykkwtfqjonzie
+mbrupupdghxlsyckwtfqjonsie
+mbrsvupdghxlzyckwtfqjonkie
+mxruvgpdghxllyckwtfqjonsie
+mbrnvapdghxlzycbwtfqfonsie
+mbrbxapdghxlzyckttfqjonsie
+mbnuvapdghxlzyxkwtmqjonsie
+mbrfvapdghjlzickwtfqjonsie
+mbhuvupdghxlzyxkwtfqjonsie
+mbrcvapdghxluyckwtfqjznsie
+mbruvapdghxlzyckwofqjoxsiz
+mbrevapdghxloyckwtfqjonnie
+mbruvipdghnlzyckwtfqjopsie
+mbxxvaptghxlzyckwtfqjonsie
+mbruvcpdghxlztckwtjqjonsie
+mqruvlpdghxlzyckotfqjonsie
+mbruvapdgqxlzyckwtfqjpvsie
+mbruvapdgvxlzyjkwtfqjbnsie
+mbruvapdghxlgyckwtfqcocsie
+mbruvapdghxkwyckwtfqjoqsie
+mbrgvavdghxlzyckwxfqjonsie
+qbruqapdgvxlzyckwtfqjonsie
+mbauvapdghxlzgckwtfqjunsie
+mbruvapdgdxluyckwtfqjoosie
+mbruvapdghxlzykkwtfqwobsie
+mbruvapdghxlzhcnwtfqjonqie
+mbruvapdghxlzycbhmfqjonsie
+mbruvapdghxluyczwtfqjontie
+mbruvapnghxlzyckwnfqjonbie
+moruvapdghxlzcckwtfqponsie
+mbruvapfgxxlzyckwtfqjunsie
+mbruvapdghxlryckvtfejonsie
+mbrzvapdghxlzvcbwtfqjonsie
+mbruvapdgqxlzyckwcfqjonsce
+abruvupdrhxlzyckwtfqjonsie
+mbrubaptghxlzyckwtfqjondie
+mgruvapdgpxlzyckwtfijonsie
+mbruvapdghxczlckwtfujonsie
+mbruvapdgmmlzyckwtfqjonsir
+mbruvapdhhxltyckwtfdjonsie
+mbruvapdghxlzyckwtfdjjnste
+mbrdvzpdghxlcyckwtfqjonsie
+mbruvapdghxlzyckwtnqbonsim
+mbrovapdghxlzyckwtfpjousie
+mymuvapdghxlzyjkwtfqjonsie
+mbpuvapdghxlzyckwtfljcnsie
+mbrxvapdghxlzyclwtfqjonpie
+mbrueapdghxlzyckwtfqjopsia
+mbruvapdghxlzycdwtfqjbfsie
+tbruvavdghxlzyckwtmqjonsie
+mbduvapdghxlzyckwrfqjrnsie
+mkrsvapughxlzyckwtfqjonsie
+mbruvapdghylzyckwtfqtolsie
+mgruvapdglxldyckwtfqjonsie
+mbrunapdghclzyckwtfqjonsiy
+mbruvapdgrxlxyckwtfgjonsie
+mbruvapdghxpzbckftfqjonsie
+mbruvcpdghxyzyckotfqjonsie
+mbruvapdghxlsyckwtfqcqnsie
+mbruvapdghxlzzckwtfqjonskf
+mbruvppdghxlzfckwtfqjgnsie
+mbhuvapdghxlzytkwtfqjonoie
+mbruvapdghxlzvrkwtfqjjnsie
+mbmuvapdghxuzyckwtfqjonsze
+mbruvapdghnlzycnwtfqjonsil
+mbruvapdgholzyckitfqjonsia
+mbruxapdghxlmyckwtfqbonsie
+mbauvapdgholzyckwtfqjolsie
+mbruvapdghxlzyckwtfqjotslq
+dbrutapdghxlzyckwtfqjonsiv
+mbruvapdzhxlyyckwtfbjonsie
+mmruaapsghxlzyckwtfqjonsie
+mbruvaldgqxqzyckwtfqjonsie
+mbruvaodghxdzyjkwtfqjonsie
+mbrcmatdghxlzyckwtfqjonsie
+mbrqvapdgtxlzycewtfqjonsie
+mjruvapdghzlzyckwtfqjonrie
+mbruvapdghxopcckwtfqjonsie
+mbruvapdghxszycwwtfqjoqsie
+mbruvapdgoxezyckwtjqjonsie")
 
 (defvar *day-1-input* "+16
 -2
