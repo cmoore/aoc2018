@@ -8,7 +8,7 @@
 (defpackage :aoc
   (:use :cl
    :alexandria)
-  (:import-from :cl-hash-util :hash-get))
+  (:import-from :alexandria :alist-hash-table :hash-table-keys :read-file-into-string))
 
 (in-package :aoc)
 
@@ -145,8 +145,6 @@
                            (scan-pattern pattern left top width height fabric)))
                        lines))))
 
-
-
 (defparameter *guard-test-data* "[1518-11-01 00:00] Guard #10 begins shift
 [1518-11-01 00:05] falls asleep
 [1518-11-01 00:25] wakes up
@@ -166,15 +164,6 @@
 [1518-11-05 00:55] wakes up
 ")
 
-(defstruct guard-record
-  year
-  month
-  day
-  hour
-  minute
-  description
-  timestamp)
-
 (defun drop-from-string (pattern string)
   (ppcre:regex-replace-all pattern string ""))
 
@@ -186,131 +175,211 @@
 (defun pad-value (a)
   (format nil "~2,'0d" a))
 
+(defun guard-number-from-string (thingy)
+  ;; We want this to go to the debugger on error.
+  (let ((this-guard (drop-from-string " begins shift"
+                                      (drop-from-string "Guard " thingy))))
+    (if (< 0 (length this-guard))
+        (parse-integer this-guard :start 1)
+        (break))))
+
+(defun range (min max)
+  (loop for n from min below max by 1
+        collect n))
+
+(defun format-date (timestamp format)
+  (with-output-to-string (sink)
+    (local-time:format-timestring sink timestamp :format format)))
+
 (defun parse-day4-data ()
   (sort (mapcar (lambda (line)
                   (let* ((words (ppcre:split " " line))
                          (date (ppcre:split "-" (drop-brackets (car words))))
                          (time (ppcre:split ":" (drop-brackets (cadr words))))
                          (sentence (subseq words 2))
-                         (year (read-from-string (car date)))
-                         (month (read-from-string (nth 1 date)))
-                         (day (read-from-string (nth 2 date)))
-                         (hour (read-from-string (car time)))
-                         (minute (read-from-string (cadr time))))
-                    (let  ((record (make-guard-record :year year
-                                                      :month month
-                                                      :day day
-                                                      :hour hour
-                                                      :minute minute
-                                                      :description (format nil "~{~a~^ ~}" sentence)
-                                                      :timestamp (local-time:parse-timestring
-                                                                  (format nil
-                                                                          "~a-~a-~aT~a:~a:00"
-                                                                          year
-                                                                          (pad-value month)
-                                                                          (pad-value day)
-                                                                          (pad-value hour)
-                                                                          (pad-value minute))))))
-                      record)))
-                ;;(read-aoc-data "/home/cmoore/quicklisp/local-projects/aoc2018/guards.txt")
-                (ppcre:split "\\n" *guard-test-data*)
-                )
+                         (year (parse-integer (nth 0 date)))
+                         (month (parse-integer (nth 1 date)))
+                         (day (parse-integer (nth 2 date)))
+                         (hour (parse-integer (car time)))
+                         (minute (parse-integer (cadr time)))
+                         (timestamp (local-time:parse-timestring
+                                     (format nil
+                                             "~a-~a-~aT~a:~a:00"
+                                             year
+                                             (pad-value month)
+                                             (pad-value day)
+                                             (pad-value hour)
+                                             (pad-value minute)))))
+                    (list timestamp (format nil "~{~a~^ ~}" sentence))))
+                (read-aoc-data "/home/cmoore/quicklisp/local-projects/aoc2018/guards.txt"))
         #'< :key #'(lambda (x)
-                     (local-time:timestamp-to-unix
-                      (guard-record-timestamp x)))))
-
-(defun guard-number-from-string (thingy)
-  ;; We want this to go to the debugger on error.
-  (let ((this-guard (drop-from-string " begins shift"
-                                      (drop-from-string "Guard " thingy))))
-    (if (< 0 (length this-guard))
-        this-guard
-        (break))))
-
-
-;; ok, now the easy part.
-;; Kinda fucked up that getting them sorted was the hardest part, but that's a problem with me
-;; and not the language, obviously.
-
-
-
-
-;; shit.  I bet they can fall asleep and wake up more than once
-;; in a shift.
+                     (local-time:timestamp-to-unix (car x)))))
 
 (defun day-4-1 ()
-  (labels ((range (max &key (min 0) (step 1))
-             (loop for n from min below max by step
-                   collect n))
-           (timestamp-to-minute (timestamp)
-             (read-from-string (with-output-to-string (sink)
-                                 (local-time:format-timestring sink
-                                                               timestamp
-                                                               :format (list :min))))))
-    (let ((current-guard nil)
-          (guard-asleep-time nil)
-          (the-results (make-hash-table :test 'equal)))
-      
-      (dolist (current (parse-day4-data))
-        (let ((description (guard-record-description current)))
-          (cond
-            ((ppcre:scan "begins shift" description)
-             (setf current-guard (guard-number-from-string description)))
+  (declare (optimize (debug 3)))
+  (let ((current-guard nil)
+        (guard-asleep-timestamp nil)
+        (results (make-hash-table :test 'equal)))
+    
+    (dolist (current (parse-day4-data))
+      (destructuring-bind (timestamp description) current
+        (cond
+          ((ppcre:scan "begins shift" description)
+           (setf current-guard (guard-number-from-string description)))
 
-            ((ppcre:scan "falls asleep" description)
-             (setf guard-asleep-time (timestamp-to-minute (guard-record-timestamp current))))
+          ((ppcre:scan "falls asleep" description)
+           (setf guard-asleep-timestamp timestamp))
 
-            ((ppcre:scan "wakes up" description)
-             ;; hash-get will return null instead of throw an error if the key
-             ;; isn't in the hash.
-             (let ((old-results (hash-get the-results (list current-guard))))
-               ;; Going for a big-ass list of numbers per guard.
-               ;; { "guard#" -> (list 1 2 3 31 2  12  3 12 4 4  5 1 2 12 ...)
-               (setf (gethash current-guard the-results) (append old-results
-                                                                 (range (timestamp-to-minute
-                                                                         (guard-record-timestamp current))
-                                                                        :min guard-asleep-time)))
-               ;; YES, I AM A MORON, I KNOW THX
-               (setf guard-asleep-time nil))))))
+          ((ppcre:scan "wakes up" description)
+           (let ((old-results (gethash current-guard results nil))
+                 (new-results (range (parse-integer (format-date guard-asleep-timestamp (list :min)))
+                                     (parse-integer (format-date timestamp (list :min))))))
+             (setf (gethash current-guard results)
+                   (append old-results new-results))
+             (setf guard-asleep-timestamp nil))))))
 
-      ;; ok, now we have the guards and a list for each
-      ;; of all of the hours they were asleep.
-      ;; Now we need a new list of the guard # and
-      ;; the one hour for which there are the most entries
-      ;; in that list of hours for them.
-      ;;
-      ;; "1212" -> (hour,count)
-      ;; or something like that.
-
-      ;; (mapcar (lambda (record)
-      ;;           (destructuring-bind (guard records) record
-      ;;             (log:info (car records))
-      ;;             (list guard (car (sort records #'< :key #'cddr))))))
-      (destructuring-bind (guard (minute count))
-          (car (sort (mapcar (lambda (guard)
-                               (let* ((records (gethash guard the-results))
-                                      (unique-minutes (remove-duplicates records)))
-                                 ;; this is about the time in the problem that
-                                 ;; I start getting lazy, partially because the
-                                 ;; hard stuff has been figured out.
-                                 ;; Yea, I'm a middle-aged kid.
-                                 (list guard (car (sort (mapcar (lambda (minute)
-                                                                  (list minute (count minute records)))
+    
+    (let ((part-1-result (destructuring-bind (guard (minute count) total-hours-slept)
+                             (car (sort (mapcar (lambda (guard)
+                                                  (let ((minutes (gethash guard results)))
+                                                    (list guard
+                                                          (car (sort (mapcar (lambda (minute)
+                                                                               (list minute (count minute minutes)))
+                                                                             (remove-duplicates minutes))
+                                                                     #'> :key #'cadr))
+                                                          (length minutes))))
+                                                (hash-table-keys results))
+                                        #'> :key #'caddr))
+                           (declare (ignore count total-hours-slept))
+                           (* guard minute)))
+          (part-2-result
+            (destructuring-bind (guard (minute xcount))
+                (car (sort (mapcar (lambda (guard)
+                                     (let* ((minutes (gethash guard results))
+                                            (unique-minutes (remove-duplicates minutes)))
+                                       (list guard
+                                             (car (sort (mapcar (lambda (minute)
+                                                                  (list minute (count minute minutes)))
                                                                 unique-minutes)
-                                                        #'> :key 'cadr)))))
-                             (alexandria:hash-table-keys the-results))
-                     #'< :key #'caadr))
-        (declare (ignore count))
-        (let ((guard-number (drop-from-string "\\#" guard)))
-          (list (* (read-from-string guard-number)
-                   minute)
-                guard-number
-                minute))))))
+                                                        #'> :key #'cadr)))))
+                                   (hash-table-keys results))
+                           #'> :key #'cadadr))
+              (declare (ignore xcount))
+              (* guard minute))))
+      (list part-1-result part-2-result))))
 
 
-;; I'm sort of lost here.
-;; Test data works, but it doesn't like my answer for a full data set.
-;; maybe it's read-from-string?... maybe.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(defparameter *day5-test-data* "dabAcCaCBAcCcaDA")
+(defparameter *day5-real-data* (alexandria:read-file-into-string "polymer.txt"))
+
+(defun collapse (a b)
+  ;; There's an eq(?) for everything.
+  (cond ((and (not (string= a b))
+              (equalp a b))
+         "")
+        (t (format nil "~A~A" a b))))
+
+(defun collapse-polymer (current-char input-stream output-stream)
+  (log:info current-char)
+  (let ((next-char (read-char input-stream nil)))
+    ;;(log:info current-char next-char)
+    ;; if the next char is eof
+    (unless next-char
+      (when current-char
+        (format output-stream "~A" current-char))
+      (return-from collapse-polymer (get-output-stream-string output-stream)))
+
+    (let ((collapsed (collapse current-char next-char)))
+      (if (string= collapsed "")
+          (progn
+            ;;(log:info "Collapsed to nothing" current-char next-char)
+            (setf current-char (read-char input-stream nil)) ;; shift to the next char
+            (setf next-char (read-char input-stream nil)) ;; and again
+            ;;(log:info "New values" current-char next-char)
+            )
+          (write-string collapsed output-stream)))
+    (collapse-polymer next-char input-stream output-stream)))
+
+(defun scan-polymer (polymer)
+  (let ((output (make-string-output-stream)))
+    (with-input-from-string (input polymer)
+      (let* ((first-character (read-char input)))
+        (collapse-polymer first-character input output)))))
+
+
+
+
+
+
+
+
+
+(defun testit ()
+  (process-polymer *day5-test-data*))
+
+(defun process-polymer (polymer)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
+  (loop
+    (let ((output (make-string-output-stream)))
+      (with-input-from-string (input polymer)
+        (collapse-polymer (read-char input) input output))
+      (let ((new-polymer (get-output-stream-string output)))
+        (log:info (length new-polymer))
+        (if (string= new-polymer polymer)
+            (return-from process-polymer (list new-polymer (length new-polymer)))
+            (setf polymer new-polymer))))))
+
+(defun day-5-1 ()
+  (process-polymer (read-file-into-string "polymer.txt")))
+
+
+
+
+
+
+
 
 
 
