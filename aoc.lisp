@@ -270,51 +270,12 @@
               (* guard minute))))
       (list part-1-result part-2-result))))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+(defun strip (string)
+  (ppcre:regex-replace-all "\\n" string ""))
 
 (defparameter *day5-test-data* "dabAcCaCBAcCcaDA")
-(defparameter *day5-real-data* (alexandria:read-file-into-string "polymer.txt"))
+
+(defparameter *day5-real-data* (strip (alexandria:read-file-into-string "polymer.txt")))
 
 (defun collapse (a b)
   ;; There's an eq(?) for everything.
@@ -324,52 +285,130 @@
         (t (format nil "~A~A" a b))))
 
 (defun collapse-polymer (current-char input-stream output-stream)
+  (declare (optimize (debug 0) (speed 2) (space 3)))
   (let ((next-char (read-char input-stream nil)))
-    ;;(log:info current-char next-char)
     (unless next-char
-      (format output-stream "~A" current-char)
+      (and current-char
+           (format output-stream "~a" current-char))
       (return-from collapse-polymer (get-output-stream-string output-stream)))
     
     (let ((collapsed (collapse current-char next-char)))
-      (log:info collapsed)
       (if (string= collapsed "")
-          (progn
-            ;;(log:info "Collapsed to nothing" current-char next-char)
-            (setf current-char (read-char input-stream nil)) ;; shift to the next char
-            (setf next-char (read-char input-stream nil)) ;; and again
-            ;;(log:info "New values" current-char next-char)
-            )
-          (format output-stream "~a" current-char)))
+          (setf next-char (read-char input-stream nil))
+          (and current-char
+               (format output-stream "~a" current-char))))
     (collapse-polymer next-char input-stream output-stream)))
 
 (defun scan-polymer (polymer)
+  (declare (optimize (debug 0) (speed 2) (space 3)))
   (let ((output (make-string-output-stream)))
     (with-input-from-string (input polymer)
       (let ((first-character (read-char input)))
         (collapse-polymer first-character input output)))))
 
-
-
-
-
-
-
-
-
-(defun testit ()
-  (process-polymer *day5-test-data*))
-
-(defun process-polymer (polymer)
+(defun react-polymer (polymer)
   (declare (optimize (debug 0) (speed 3) (space 3)))
   (loop
-    (let ((output (make-string-output-stream)))
-      (with-input-from-string (input polymer)
-        (collapse-polymer (read-char input) input output))
-      (let ((new-polymer (get-output-stream-string output)))
-        (log:info (length new-polymer))
-        (if (string= new-polymer polymer)
-            (return-from process-polymer (list new-polymer (length new-polymer)))
-            (setf polymer new-polymer))))))
+    (let ((new-polymer (scan-polymer polymer)))
+      (if (string= polymer new-polymer)
+          (return-from react-polymer new-polymer)
+          (setf polymer new-polymer)))))
 
 (defun day-5-1 ()
-  (process-polymer (read-file-into-string "polymer.txt")))
+  (length
+   (react-polymer (ppcre:regex-replace-all "\\n" *day5-real-data* ""))))
+
+(defun clean-polymer (char polymer)
+  (let ((ugh (ppcre:regex-replace-all (format nil "~a" char) polymer "")))
+    (ppcre:regex-replace-all (format nil "~a" (string-upcase
+                                               (format nil "~a" char)))
+                             ugh "")))
+
+(defun day-5-2 ()
+  (car (sort (mapcar (lambda (char)
+                       (length (react-polymer (clean-polymer char *day5-real-data*))))
+                     (coerce "abcdefghijklmnopqrstuvxyzw" 'list))
+             #'<)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(defparameter *day6-test-data* "1, 1
+1, 6
+8, 3
+3, 4
+5, 5
+8, 9")
+
+(defun distance (a b)
+  (+ (abs (- (car a) (car b)))
+     (abs (- (cadr a) (cadr b)))))
+
+(defun print-pair (pair)
+  (format nil "~a/~a" (car pair) (cadr pair)))
+
+(defun make-pairs (string)
+  (map 'list (lambda (x)
+               (destructuring-bind (a b)
+                   (ppcre:split ", " x)
+                 (list (parse-integer a) (parse-integer b))))
+       (ppcre:split "\\n" string)))
+
+(defun pair-in-tha-hizzy (pair pairs)
+  (let ((values (sort (mapcar (lambda (pair-b)
+                                (list pair-b (distance pair pair-b)))
+                              pairs)
+                      #'< :key #'cadr)))
+    (cond ((= (cadr (car values))
+              (cadr (cadr values)))
+           ".")
+          (t (print-pair (caar values))))))
+
+(defun test ()
+  (let* ((pairs (make-pairs *day6-test-data*))
+         (board-size (car (sort (alexandria:flatten pairs) #'>)))
+         (board (make-array (list board-size board-size) :initial-element "")))
+    (dotimes (x board-size)
+      (dotimes (y board-size)
+        (setf (aref board x y) (pair-in-tha-hizzy (list x y) pairs))))
+    (pprint board *standard-output*)))
