@@ -2,6 +2,8 @@
 
 (ql:quickload '(:alexandria
                 :cl-ppcre
+                :local-time
+                :log4cl
                 :array-operations
                 :cl-hash-util))
 
@@ -322,16 +324,14 @@
         (t (format nil "~A~A" a b))))
 
 (defun collapse-polymer (current-char input-stream output-stream)
-  (log:info current-char)
   (let ((next-char (read-char input-stream nil)))
     ;;(log:info current-char next-char)
-    ;; if the next char is eof
     (unless next-char
-      (when current-char
-        (format output-stream "~A" current-char))
+      (format output-stream "~A" current-char)
       (return-from collapse-polymer (get-output-stream-string output-stream)))
-
+    
     (let ((collapsed (collapse current-char next-char)))
+      (log:info collapsed)
       (if (string= collapsed "")
           (progn
             ;;(log:info "Collapsed to nothing" current-char next-char)
@@ -339,13 +339,13 @@
             (setf next-char (read-char input-stream nil)) ;; and again
             ;;(log:info "New values" current-char next-char)
             )
-          (write-string collapsed output-stream)))
+          (format output-stream "~a" current-char)))
     (collapse-polymer next-char input-stream output-stream)))
 
 (defun scan-polymer (polymer)
   (let ((output (make-string-output-stream)))
     (with-input-from-string (input polymer)
-      (let* ((first-character (read-char input)))
+      (let ((first-character (read-char input)))
         (collapse-polymer first-character input output)))))
 
 
@@ -373,13 +373,3 @@
 
 (defun day-5-1 ()
   (process-polymer (read-file-into-string "polymer.txt")))
-
-
-
-
-
-
-
-
-
-
