@@ -186,7 +186,7 @@
         (break))))
 
 (defun range (min max)
-  (loop for n from min below (+ 1 max) by 1
+  (loop for n from min below max by 1
         collect n))
 
 (defun format-date (timestamp format)
@@ -409,13 +409,6 @@
            ".")
           (t (caar values)))))
 
-;; (defun area-of (board pair)
-  
-;;   (sort (mapcar (lambda (unique)
-;;                   (list unique (count unique list :test #'string=)))
-;;                 (remove-duplicates list :test #'string=))
-;;         #'> :key #'cadr))
-
 (defun bounding-box-values (board)
   (declare (type array board))
   ;; values at 0,0 -> 0,size + 0,0 -> size,0 + size,0 -> size,size + 0,size + size,size
@@ -432,29 +425,64 @@
         (setf result (append result (list (aref board element (- size-y 1)))))))
     result))
 
-(defun test ()
-  (let* ((pairs (make-pairs *day6-real-data*))
-         (board-size (+ 1 (car (sort (alexandria:flatten pairs) #'>))))
-         (board (make-array (list board-size board-size) :initial-element ""))
-         (cell-values nil))
-    ;; Set the 'owner' of all cells
+(defun make-board (pairs)
+  (let ((board-size (+ 1 (car (sort (alexandria:flatten pairs) #'>)))))
+    (make-array (list board-size board-size) :initial-element "")))
+
+(defun plot-pair (board pair)
+  (destructuring-bind (x y) pair
+    (setf (aref board y x) pair)))
+
+(defun plot-owners (board pairs)
+  ;; Set the 'owner' of all cells
+  ;; it's both side affecting, and returns a new value
+  ;; so basically all of the worst parts of the bible
+  ;; in one function.
+  (let ((cell-values nil)
+        (board-size (car (array-dimensions board))))
     (dotimes (x board-size)
       (dotimes (y board-size)
         (let ((owner-result (cell-owner pairs x y)))
           (setf cell-values (append cell-values (list owner-result)))
           (setf (aref board y x) owner-result))))
+    cell-values))
 
-    (let* ((bounding-pairs (remove-if (lambda (x)
-                                        (equalp x "."))
-                                      (remove-duplicates (bounding-box-values board))))
-           (unbounded-pairs (remove-if (lambda (x)
-                                         (member x bounding-pairs))
-                                       pairs))
-           (new-cell-values (remove-if (lambda (x)
-                                         (equal x "."))
-                                       cell-values)))
+(defun get-bounding-pairs (board)
+  (remove-if (lambda (x)
+               (equalp x "."))
+             (remove-duplicates (bounding-box-values board))))
 
-      (car (sort (mapcar (lambda (unbound-pair)
-                           (list unbound-pair (count unbound-pair new-cell-values :test #'equalp)))
-                         unbounded-pairs)
-                 #'> :key #'cadr)))))
+(defun day6-1 ()
+  (let* ((pairs (make-pairs *day6-test-data*))
+         (board (make-board pairs)))
+    (let ((cell-values (plot-owners board pairs)))
+      (let* ((bounding-pairs (get-bounding-pairs board))
+             (unbounded-pairs (remove-if (lambda (x)
+                                           (member x bounding-pairs))
+                                         pairs))
+             (new-cell-values (remove-if (lambda (x)
+                                           (equal x "."))
+                                         cell-values)))
+        (car (sort (mapcar (lambda (unbound-pair)
+                             (list unbound-pair (count unbound-pair new-cell-values :test #'equalp)))
+                           unbounded-pairs)
+                   #'> :key #'cadr))))))
+
+(defun calculate-distances (x y pairs)
+  (mapcar (lambda (pair)
+            (distance pair x y))
+          pairs))
+
+(defun day6-2 ()
+  (let* ((pairs (make-pairs *day6-real-data*))
+         (threshold 10000)
+         (board (make-board pairs))
+         (board-size (car (array-dimensions board)))
+         (results nil))
+
+    (dolist (x (range 0 board-size))
+      (dolist (y (range 0 board-size))
+        (let ((distances (reduce #'+ (calculate-distances x y pairs))))
+          (when (<= distances threshold)
+            (setf results (append results (list (list x y distances))))))))
+    (length results)))
