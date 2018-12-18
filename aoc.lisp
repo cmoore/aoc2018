@@ -186,7 +186,7 @@
         (break))))
 
 (defun range (min max)
-  (loop for n from min below max by 1
+  (loop for n from min below (+ 1 max) by 1
         collect n))
 
 (defun format-date (timestamp format)
@@ -219,56 +219,59 @@
 
 (defun day-4-1 ()
   (declare (optimize (debug 3)))
-  (let ((current-guard nil)
-        (guard-asleep-timestamp nil)
-        (results (make-hash-table :test 'equal)))
-    
-    (dolist (current (parse-day4-data))
-      (destructuring-bind (timestamp description) current
-        (cond
-          ((ppcre:scan "begins shift" description)
-           (setf current-guard (guard-number-from-string description)))
+  (labels ((range (min max)
+             (loop for n from min below (+ 1 max) by 1
+                   collect n)))
+    (let ((current-guard nil)
+          (guard-asleep-timestamp nil)
+          (results (make-hash-table :test 'equal)))
+      
+      (dolist (current (parse-day4-data))
+        (destructuring-bind (timestamp description) current
+          (cond
+            ((ppcre:scan "begins shift" description)
+             (setf current-guard (guard-number-from-string description)))
 
-          ((ppcre:scan "falls asleep" description)
-           (setf guard-asleep-timestamp timestamp))
+            ((ppcre:scan "falls asleep" description)
+             (setf guard-asleep-timestamp timestamp))
 
-          ((ppcre:scan "wakes up" description)
-           (let ((old-results (gethash current-guard results nil))
-                 (new-results (range (parse-integer (format-date guard-asleep-timestamp (list :min)))
-                                     (parse-integer (format-date timestamp (list :min))))))
-             (setf (gethash current-guard results)
-                   (append old-results new-results))
-             (setf guard-asleep-timestamp nil))))))
+            ((ppcre:scan "wakes up" description)
+             (let ((old-results (gethash current-guard results nil))
+                   (new-results (range (parse-integer (format-date guard-asleep-timestamp (list :min)))
+                                       (parse-integer (format-date timestamp (list :min))))))
+               (setf (gethash current-guard results)
+                     (append old-results new-results))
+               (setf guard-asleep-timestamp nil))))))
 
-    
-    (let ((part-1-result (destructuring-bind (guard (minute count) total-hours-slept)
-                             (car (sort (mapcar (lambda (guard)
-                                                  (let ((minutes (gethash guard results)))
-                                                    (list guard
-                                                          (car (sort (mapcar (lambda (minute)
-                                                                               (list minute (count minute minutes)))
-                                                                             (remove-duplicates minutes))
-                                                                     #'> :key #'cadr))
-                                                          (length minutes))))
-                                                (hash-table-keys results))
-                                        #'> :key #'caddr))
-                           (declare (ignore count total-hours-slept))
-                           (* guard minute)))
-          (part-2-result
-            (destructuring-bind (guard (minute xcount))
-                (car (sort (mapcar (lambda (guard)
-                                     (let* ((minutes (gethash guard results))
-                                            (unique-minutes (remove-duplicates minutes)))
-                                       (list guard
-                                             (car (sort (mapcar (lambda (minute)
-                                                                  (list minute (count minute minutes)))
-                                                                unique-minutes)
-                                                        #'> :key #'cadr)))))
-                                   (hash-table-keys results))
-                           #'> :key #'cadadr))
-              (declare (ignore xcount))
-              (* guard minute))))
-      (list part-1-result part-2-result))))
+      
+      (let ((part-1-result (destructuring-bind (guard (minute count) total-hours-slept)
+                               (car (sort (mapcar (lambda (guard)
+                                                    (let ((minutes (gethash guard results)))
+                                                      (list guard
+                                                            (car (sort (mapcar (lambda (minute)
+                                                                                 (list minute (count minute minutes)))
+                                                                               (remove-duplicates minutes))
+                                                                       #'> :key #'cadr))
+                                                            (length minutes))))
+                                                  (hash-table-keys results))
+                                          #'> :key #'caddr))
+                             (declare (ignore count total-hours-slept))
+                             (* guard minute)))
+            (part-2-result
+              (destructuring-bind (guard (minute xcount))
+                  (car (sort (mapcar (lambda (guard)
+                                       (let* ((minutes (gethash guard results))
+                                              (unique-minutes (remove-duplicates minutes)))
+                                         (list guard
+                                               (car (sort (mapcar (lambda (minute)
+                                                                    (list minute (count minute minutes)))
+                                                                  unique-minutes)
+                                                          #'> :key #'cadr)))))
+                                     (hash-table-keys results))
+                             #'> :key #'cadadr))
+                (declare (ignore xcount))
+                (* guard minute))))
+        (list part-1-result part-2-result))))))
 
 (defun strip (string)
   (ppcre:regex-replace-all "\\n" string ""))
@@ -379,10 +382,11 @@
 3, 4
 5, 5
 8, 9")
+(defparameter *day6-real-data* (alexandria:read-file-into-string "coords.txt"))
 
-(defun distance (a b)
-  (+ (abs (- (car a) (car b)))
-     (abs (- (cadr a) (cadr b)))))
+(defun distance (pair x y)
+  (+ (abs (- (car pair) x))
+     (abs (- (cadr pair) y))))
 
 (defun print-pair (pair)
   (format nil "~a/~a" (car pair) (cadr pair)))
@@ -394,21 +398,63 @@
                  (list (parse-integer a) (parse-integer b))))
        (ppcre:split "\\n" string)))
 
-(defun pair-in-tha-hizzy (pair pairs)
-  (let ((values (sort (mapcar (lambda (pair-b)
-                                (list pair-b (distance pair pair-b)))
+(defun cell-owner (pairs x y)
+  ;; Determine the 'owner' of this cell
+  (let ((values (sort (mapcar (lambda (pair)
+                                (list pair (distance pair x y)))
                               pairs)
                       #'< :key #'cadr)))
     (cond ((= (cadr (car values))
               (cadr (cadr values)))
            ".")
-          (t (print-pair (caar values))))))
+          (t (caar values)))))
+
+;; (defun area-of (board pair)
+  
+;;   (sort (mapcar (lambda (unique)
+;;                   (list unique (count unique list :test #'string=)))
+;;                 (remove-duplicates list :test #'string=))
+;;         #'> :key #'cadr))
+
+(defun bounding-box-values (board)
+  (declare (type array board))
+  ;; values at 0,0 -> 0,size + 0,0 -> size,0 + size,0 -> size,size + 0,size + size,size
+  ;; etc.
+  (let ((result nil))
+    (destructuring-bind (size-x size-y) (array-dimensions board)
+      (dotimes (element size-x)
+        (setf result (append result (list (aref board 0 element)))))
+      (dotimes (element size-x)
+        (setf result (append result (list (aref board (- size-x 1) element)))))
+      (dotimes (element size-y)
+        (setf result (append result (list (aref board element 0)))))
+      (dotimes (element size-y)
+        (setf result (append result (list (aref board element (- size-y 1)))))))
+    result))
 
 (defun test ()
-  (let* ((pairs (make-pairs *day6-test-data*))
-         (board-size (car (sort (alexandria:flatten pairs) #'>)))
-         (board (make-array (list board-size board-size) :initial-element "")))
+  (let* ((pairs (make-pairs *day6-real-data*))
+         (board-size (+ 1 (car (sort (alexandria:flatten pairs) #'>))))
+         (board (make-array (list board-size board-size) :initial-element ""))
+         (cell-values nil))
+    ;; Set the 'owner' of all cells
     (dotimes (x board-size)
       (dotimes (y board-size)
-        (setf (aref board x y) (pair-in-tha-hizzy (list x y) pairs))))
-    (pprint board *standard-output*)))
+        (let ((owner-result (cell-owner pairs x y)))
+          (setf cell-values (append cell-values (list owner-result)))
+          (setf (aref board y x) owner-result))))
+
+    (let* ((bounding-pairs (remove-if (lambda (x)
+                                        (equalp x "."))
+                                      (remove-duplicates (bounding-box-values board))))
+           (unbounded-pairs (remove-if (lambda (x)
+                                         (member x bounding-pairs))
+                                       pairs))
+           (new-cell-values (remove-if (lambda (x)
+                                         (equal x "."))
+                                       cell-values)))
+
+      (car (sort (mapcar (lambda (unbound-pair)
+                           (list unbound-pair (count unbound-pair new-cell-values :test #'equalp)))
+                         unbounded-pairs)
+                 #'> :key #'cadr)))))
