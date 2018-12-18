@@ -10,7 +10,7 @@
 (defpackage :aoc
   (:use :cl
    :alexandria)
-  (:import-from :alexandria :alist-hash-table :hash-table-keys :read-file-into-string))
+  (:import-from :alexandria :flatten :alist-hash-table :hash-table-keys :read-file-into-string))
 
 (in-package :aoc)
 
@@ -185,10 +185,6 @@
         (parse-integer this-guard :start 1)
         (break))))
 
-(defun range (min max)
-  (loop for n from min below max by 1
-        collect n))
-
 (defun format-date (timestamp format)
   (with-output-to-string (sink)
     (local-time:format-timestring sink timestamp :format format)))
@@ -271,7 +267,7 @@
                              #'> :key #'cadadr))
                 (declare (ignore xcount))
                 (* guard minute))))
-        (list part-1-result part-2-result))))))
+        (list part-1-result part-2-result)))))
 
 (defun strip (string)
   (ppcre:regex-replace-all "\\n" string ""))
@@ -399,6 +395,7 @@
        (ppcre:split "\\n" string)))
 
 (defun cell-owner (pairs x y)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
   ;; Determine the 'owner' of this cell
   (let ((values (sort (mapcar (lambda (pair)
                                 (list pair (distance pair x y)))
@@ -410,7 +407,7 @@
           (t (caar values)))))
 
 (defun bounding-box-values (board)
-  (declare (type array board))
+  (declare (optimize (debug 0) (speed 3) (space 3)))
   ;; values at 0,0 -> 0,size + 0,0 -> size,0 + size,0 -> size,size + 0,size + size,size
   ;; etc.
   (let ((result nil))
@@ -430,10 +427,12 @@
     (make-array (list board-size board-size) :initial-element "")))
 
 (defun plot-pair (board pair)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
   (destructuring-bind (x y) pair
     (setf (aref board y x) pair)))
 
 (defun plot-owners (board pairs)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
   ;; Set the 'owner' of all cells
   ;; it's both side affecting, and returns a new value
   ;; so basically all of the worst parts of the bible
@@ -448,12 +447,14 @@
     cell-values))
 
 (defun get-bounding-pairs (board)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
   (remove-if (lambda (x)
                (equalp x "."))
              (remove-duplicates (bounding-box-values board))))
 
 (defun day6-1 ()
-  (let* ((pairs (make-pairs *day6-test-data*))
+  (declare (optimize (debug 0) (speed 3) (space 3)))
+  (let* ((pairs (make-pairs *day6-real-data*))
          (board (make-board pairs)))
     (let ((cell-values (plot-owners board pairs)))
       (let* ((bounding-pairs (get-bounding-pairs board))
@@ -486,3 +487,89 @@
           (when (<= distances threshold)
             (setf results (append results (list (list x y distances))))))))
     (length results)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(defparameter *day7-test-data* "Step C must be finished before step A can begin.
+Step C must be finished before step F can begin.
+Step A must be finished before step B can begin.
+Step A must be finished before step D can begin.
+Step B must be finished before step E can begin.
+Step D must be finished before step E can begin.
+Step F must be finished before step E can begin.")
+(defparameter *day7-real-data* (alexandria:read-file-into-string "steps.txt"))
+
+(defun parse-steps (string)
+  (let* ((raw-steps (mapcar (lambda (line)
+                          (let ((elements (ppcre:split " " line)))
+                            (list (nth 7 elements) (nth 1 elements))))
+                        (ppcre:split "\\n" string)))
+         (unique (sort (remove-duplicates
+                        (alexandria:flatten
+                         (list (mapcar #'car raw-steps)
+                               (mapcar #'cdr raw-steps)))
+                        :test #'string=)
+                       #'string<)))
+    (mapcar (lambda (step)
+              ;; oops, I think I deleted depends-of
+              (list step (depends-of step raw-steps)))
+            unique)))
+
+;; (defun depends-on (step steps)
+;;   ;; Has to be in alphabetical order.
+;;   (remove-if-not (lambda (x)
+;;                    (member (car step)
+;;                            (cadr x) :test #'string=))
+;;              steps))
+
+(defun first-step (steps)
+  (car (remove-if-not #'null steps :key #'cadr)))
+
+(defun clear-step (step steps)
+  "Wipes step from the step list and dependencies."
+  (mapcar (lambda (x)
+            (destructuring-bind (name deps) x
+              (list name (remove-if (lambda (x)
+                                      (string= x step))
+                                    deps))))
+          (remove-if (lambda (x)
+                       (string= step (car x)))
+                     steps)))
+
+(defun next-step (steps)
+  (let ((next-step (remove-if-not (lambda (x)
+                                    (null (cadr x)))
+                                  (sort steps #'string< :key #'car))))
+    (car next-step)))
+
+(defun interpret (step steps output)
+  (format output (car step))
+  (let* ((new-step-list (clear-step (car step) steps))
+         (next-step (next-step new-step-list)))
+    (when next-step
+      (current-step next-step new-step-list output))))
+
+(defun day7-1 ()
+  (let* ((steps (parse-steps *day7-real-data*))
+         (first-step (next-step steps))
+         (output (make-string-output-stream)))
+    (interpret first-step steps output)
+    (pprint (get-output-stream-string output))))
+
