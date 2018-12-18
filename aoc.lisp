@@ -10,9 +10,13 @@
 (defpackage :aoc
   (:use :cl
    :alexandria)
-  (:import-from :alexandria :flatten :alist-hash-table :hash-table-keys :read-file-into-string))
+  (:import-from :alexandria :when-let :flatten :alist-hash-table :hash-table-keys :read-file-into-string))
 
 (in-package :aoc)
+
+(defun range (min max)
+  (loop for n from min below max by 1
+        collect n))
 
 (defun read-aoc-data (file)
   (ppcre:split "\\n" (alexandria:read-file-into-string file)))
@@ -329,55 +333,13 @@
                      (coerce "abcdefghijklmnopqrstuvxyzw" 'list))
              #'<)))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (defparameter *day6-test-data* "1, 1
 1, 6
 8, 3
 3, 4
 5, 5
 8, 9")
+
 (defparameter *day6-real-data* (alexandria:read-file-into-string "coords.txt"))
 
 (defun distance (pair x y)
@@ -480,32 +442,13 @@
          (board (make-board pairs))
          (board-size (car (array-dimensions board)))
          (results nil))
-
+    
     (dolist (x (range 0 board-size))
       (dolist (y (range 0 board-size))
         (let ((distances (reduce #'+ (calculate-distances x y pairs))))
           (when (<= distances threshold)
             (setf results (append results (list (list x y distances))))))))
     (length results)))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 (defparameter *day7-test-data* "Step C must be finished before step A can begin.
 Step C must be finished before step F can begin.
@@ -517,30 +460,29 @@ Step F must be finished before step E can begin.")
 (defparameter *day7-real-data* (alexandria:read-file-into-string "steps.txt"))
 
 (defun parse-steps (string)
-  (let* ((raw-steps (mapcar (lambda (line)
-                          (let ((elements (ppcre:split " " line)))
-                            (list (nth 7 elements) (nth 1 elements))))
-                        (ppcre:split "\\n" string)))
-         (unique (sort (remove-duplicates
-                        (alexandria:flatten
-                         (list (mapcar #'car raw-steps)
-                               (mapcar #'cdr raw-steps)))
-                        :test #'string=)
-                       #'string<)))
-    (mapcar (lambda (step)
-              ;; oops, I think I deleted depends-of
-              (list step (depends-of step raw-steps)))
-            unique)))
+  (labels ((depends-of (step-name steps)
+             (remove-if #'null (mapcar (lambda (x)
+                                         (when (string= step-name (car x))
+                                           (second x)))
+                                       steps))))
+    (let* ((raw-steps (mapcar (lambda (line)
+                                (let ((elements (ppcre:split " " line)))
+                                  (list (nth 7 elements) (nth 1 elements))))
+                              (ppcre:split "\\n" string)))
+           (unique (sort (remove-duplicates
+                          (alexandria:flatten
+                           (list (mapcar #'car raw-steps)
+                                 (mapcar #'cdr raw-steps)))
+                          :test #'string=)
+                         #'string<)))
+      (mapcar (lambda (step)
+                (list step (depends-of step raw-steps)))
+              unique))))
 
-;; (defun depends-on (step steps)
-;;   ;; Has to be in alphabetical order.
-;;   (remove-if-not (lambda (x)
-;;                    (member (car step)
-;;                            (cadr x) :test #'string=))
-;;              steps))
-
-(defun first-step (steps)
-  (car (remove-if-not #'null steps :key #'cadr)))
+(defun next-step (steps)
+  (car (remove-if-not (lambda (x)
+                           (null (cadr x)))
+                         (sort steps #'string< :key #'car))))
 
 (defun clear-step (step steps)
   "Wipes step from the step list and dependencies."
@@ -553,18 +495,12 @@ Step F must be finished before step E can begin.")
                        (string= step (car x)))
                      steps)))
 
-(defun next-step (steps)
-  (let ((next-step (remove-if-not (lambda (x)
-                                    (null (cadr x)))
-                                  (sort steps #'string< :key #'car))))
-    (car next-step)))
-
 (defun interpret (step steps output)
   (format output (car step))
   (let* ((new-step-list (clear-step (car step) steps))
          (next-step (next-step new-step-list)))
     (when next-step
-      (current-step next-step new-step-list output))))
+      (interpret next-step new-step-list output))))
 
 (defun day7-1 ()
   (let* ((steps (parse-steps *day7-real-data*))
@@ -572,4 +508,108 @@ Step F must be finished before step E can begin.")
          (output (make-string-output-stream)))
     (interpret first-step steps output)
     (pprint (get-output-stream-string output))))
+
+(defparameter
+    +letters+
+  (mapcar (lambda (x)
+            (string-upcase (format nil "~a" x)))
+          (loop with a = (char-code #\a)
+                for i below 26
+                collect (code-char (+ a i)))))
+
+(defun value-of-char (char)
+  ;; for real data, add (+ 60 ..)
+  (+ 60 1 (position char +letters+ :test #'string=)))
+
+(defparameter *workers* nil)
+
+(defparameter *steps* nil)
+
+(defun available-steps ()
+  (remove-if-not (lambda (x)
+                   (or (member (car x)
+                                (running-jobs))
+                        (null (cadr x))))
+                 (sort *steps* #'string< :key #'car)))
+
+(defun running-jobs ()
+  (remove-duplicates
+   (mapcar #'cadr *workers*)))
+
+(defun delegate-work (step)
+  (when-let ((idle-workers (remove-if-not
+                            (lambda (x)
+                              (member :idle x))
+                            *workers*)))
+    (let ((worker (car idle-workers)))
+      (remove-step (car step))
+      (replace-worker (list (car worker)
+                            (car step)
+                            (- (value-of-char
+                                (car step)) 1))))))
+
+(defun remove-step (step)
+  (setf *steps*
+        (remove-if (lambda (x)
+                     (string= step (car x)))
+                   *steps*)))
+
+(defun remove-step-dep (step)
+  "Wipes step from the step list and dependencies."
+  (setf *steps*
+        (mapcar (lambda (x)
+                  (destructuring-bind (name deps) x
+                    (list name (remove-if (lambda (x)
+                                            (string= x step))
+                                          deps))))
+                *steps*)))
+
+(defun replace-worker (worker)
+  (let ((new-list (remove-if (lambda (x)
+                               (eq (car worker) (car x)))
+                             *workers*)))
+    (setf *workers* (append new-list (list worker)))))
+
+(defun step-worker (worker)
+  (unless (member :idle worker)
+    (destructuring-bind (id job steps) worker
+      (if (= 0 steps)
+        (progn
+          (remove-step-dep job)
+          (replace-worker (list id :idle)))
+        (replace-worker (list id job (- steps 1)))))))
+
+(defun evaluate-workers (output)
+  (when (and (null *steps*)
+             (null (remove-if (lambda (x)
+                                (member :idle x))
+                              *workers*)))
+    (return-from evaluate-workers))
+  (log:info *workers*)
+  (format output "1")
+  
+  (dolist (worker *workers*)
+    (step-worker worker))
+
+  ;; if there are idle workers
+  ;; and if there are jobs to be done
+  ;; delegate them
+  (dolist (step (available-steps))
+    (delegate-work step))
+
+  (evaluate-workers output))
+
+(defun day7-2 ()
+  (setf *workers* (map 'list
+                       (lambda (x)
+                         (list x :idle))
+                       (range 0 5)))
+  (setf *steps* (parse-steps *day7-real-data*))
+  
+  (let ((output (make-string-output-stream)))
+    (dolist (step (available-steps))
+      (delegate-work step))
+    (evaluate-workers output)
+    (get-output-stream-string output)))
+
 
