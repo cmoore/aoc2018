@@ -88,7 +88,6 @@
         (gethash highest-score result-table)))))
 
 (defun parse-line (line)
-  (declare (optimize (debug 3)))
   (destructuring-bind (pattern at start-end dims)
       (ppcre:split " " line)
     (declare (ignore at))
@@ -101,8 +100,7 @@
             (read-from-string (cadr dimensions))))))
 
 (defun set-pattern (pattern top-edge left-edge width height fabric)
-  (declare (optimize (debug 3))
-           (type string pattern))
+  (declare (type string pattern))
   (dotimes (left-count height)
     (dotimes (top-count width)
       (let ((left (+ left-edge left-count))
@@ -218,7 +216,6 @@
                      (local-time:timestamp-to-unix (car x)))))
 
 (defun day-4-1 ()
-  (declare (optimize (debug 3)))
   (labels ((range (min max)
              (loop for n from min below (+ 1 max) by 1
                    collect n)))
@@ -288,7 +285,6 @@
         (t (format nil "~A~A" a b))))
 
 (defun collapse-polymer (current-char input-stream output-stream)
-  (declare (optimize (debug 0) (speed 2) (space 3)))
   (let ((next-char (read-char input-stream nil)))
     (unless next-char
       (and current-char
@@ -310,7 +306,6 @@
         (collapse-polymer first-character input output)))))
 
 (defun react-polymer (polymer)
-  (declare (optimize (debug 0) (speed 3) (space 3)))
   (loop
     (let ((new-polymer (scan-polymer polymer)))
       (if (string= polymer new-polymer)
@@ -369,7 +364,6 @@
           (t (caar values)))))
 
 (defun bounding-box-values (board)
-  (declare (optimize (debug 0) (speed 3) (space 3)))
   ;; values at 0,0 -> 0,size + 0,0 -> size,0 + size,0 -> size,size + 0,size + size,size
   ;; etc.
   (let ((result nil))
@@ -385,6 +379,10 @@
     result))
 
 (defun make-board (pairs)
+  ;; postmortem
+  ;; I didn't bother to look up "largest element of a list" when I wrote this.
+  ;; The first line should be
+  ;; (let ((board-size (+ 1 (reduce #'max pairs)))
   (let ((board-size (+ 1 (car (sort (alexandria:flatten pairs) #'>)))))
     (make-array (list board-size board-size) :initial-element "")))
 
@@ -394,7 +392,6 @@
     (setf (aref board y x) pair)))
 
 (defun plot-owners (board pairs)
-  (declare (optimize (debug 0) (speed 3) (space 3)))
   ;; Set the 'owner' of all cells
   ;; it's both side affecting, and returns a new value
   ;; so basically all of the worst parts of the bible
@@ -415,7 +412,6 @@
              (remove-duplicates (bounding-box-values board))))
 
 (defun day6-1 ()
-  (declare (optimize (debug 0) (speed 3) (space 3)))
   (let* ((pairs (make-pairs *day6-real-data*))
          (board (make-board pairs)))
     (let ((cell-values (plot-owners board pairs)))
@@ -612,4 +608,64 @@ Step F must be finished before step E can begin.")
     (evaluate-workers output)
     (get-output-stream-string output)))
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;;
+;; [before starting day8]
+;;
+;; I'm going to try to use stmx and lparallel
+;; where applicable from here on. stmx is the
+;; go-to software transactional memory implementation
+;;
+
+
+(defparameter +day8-test-data+ (list "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2"))
+(defun +day8-real-data* (strip (read-file-into-string "nodes.txt")))
 
