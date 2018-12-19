@@ -1,18 +1,13 @@
 ;; -*- mode: Lisp; Syntax: common-lisp; Package: aoc; Base: 10 -*-
 
-(ql:quickload '(:alexandria
-                :cl-ppcre
-                :local-time
-                :log4cl
-                :array-operations
-                :cl-hash-util))
-
 (defpackage :aoc
   (:use :cl
    :alexandria)
   (:import-from :alexandria :when-let :flatten :alist-hash-table :hash-table-keys :read-file-into-string))
 
 (in-package :aoc)
+
+
 
 (defun range (min max)
   (loop for n from min below max by 1
@@ -21,22 +16,13 @@
 (defun read-aoc-data (file)
   (ppcre:split "\\n" (alexandria:read-file-into-string file)))
 
-(defun day-1 ()
+(defun day1-1 ()
   (let ((result 0))
     (dolist (current (read-aoc-data "day1.txt"))
       (setf result (+ result (read-from-string current))))
-    result))
+    (pprint result)))
 
-(defun day-2 (&key (result-table (make-hash-table)) (result 0))
-  (dolist (current (read-aoc-data "day1.txt"))
-    (let ((temp-result (+ result (read-from-string current))))
-      (when (gethash temp-result result-table)
-        (return-from day-2 temp-result))
-      (setf (gethash temp-result result-table) 1)
-      (setf result temp-result)))
-  (day-2 :result-table result-table :result result))
-
-(defun day-2-2 ()
+(defun day1-2 ()
   (flet ((score-for-box-code (box-code)
            (let ((tmp-result-table (make-hash-table :test 'equal)))
              (dolist (character (coerce box-code 'list))
@@ -63,9 +49,18 @@
             (setf box-threes 1))
           (setf twos (+ twos box-twos))
           (setf threes (+ threes box-threes))))
-      (* twos threes))))
+      (format t "~a" (* twos threes)))))
 
-(defun day-2-similar-box-ids ()
+(defun day1-2 (&key (result-table (make-hash-table)) (result 0))
+  (dolist (current (read-aoc-data "day1.txt"))
+    (let ((temp-result (+ result (read-from-string current))))
+      (when (gethash temp-result result-table)
+        (return-from day1-2 temp-result))
+      (setf (gethash temp-result result-table) 1)
+      (setf result temp-result)))
+  (day1-2 :result-table result-table :result result))
+
+(defun day2-2 ()
   (flet ((box-id-sort-fn (a b result-table)
            (let ((a-list (coerce a 'list))
                  (b-list (coerce b 'list))
@@ -86,6 +81,9 @@
           (box-id-sort-fn box-code b-list result-table)))
       (let ((highest-score (car (sort (alexandria:hash-table-keys result-table) #'>))))
         (gethash highest-score result-table)))))
+
+
+
 
 (defun parse-line (line)
   (destructuring-bind (pattern at start-end dims)
@@ -112,16 +110,16 @@
             (setf (aref fabric left top) pattern))))))
 
 (defun day3-1 ()
-  (let ((fabric (make-array '(1001 1001) :initial-element 0 :adjustable t)))
-    (dolist (line (read-aoc-data "elf-tailors.txt"))
-      (destructuring-bind (pattern left top width height)
-          (parse-line line)
-        (set-pattern pattern left top width height fabric)))
-    (length
-     (remove-if-not (lambda (slot)
-                      (and (stringp slot)
-                           (string= slot "X")))
-                    (coerce (aops:flatten fabric) 'list)))))
+  (pprint (let ((fabric (make-array '(1001 1001) :initial-element 0 :adjustable t)))
+            (dolist (line (read-aoc-data "elf-tailors.txt"))
+              (destructuring-bind (pattern left top width height)
+                  (parse-line line)
+                (set-pattern pattern left top width height fabric)))
+            (length
+             (remove-if-not (lambda (slot)
+                              (and (stringp slot)
+                                   (string= slot "X")))
+                            (coerce (aops:flatten fabric) 'list))))))
 
 (defun scan-pattern (pattern top-edge left-edge width height fabric)
   (dotimes (left-count height)
@@ -142,12 +140,17 @@
         (set-pattern pattern left top width height fabric)))
     ;; ewww... but hey, I'm kinda tired.
     ;; I'll fix this tomorrow while I wait for the next challenge.
-    (remove-if #'null
-               (mapcar (lambda (line)
-                         (destructuring-bind (pattern left top width height)
-                             (parse-line line)
-                           (scan-pattern pattern left top width height fabric)))
-                       lines))))
+    (pprint
+     (car (remove-if #'null
+                     (mapcar (lambda (line)
+                               (destructuring-bind (pattern left top width height)
+                                   (parse-line line)
+                                 (scan-pattern pattern left top width height fabric)))
+                             lines))))))
+
+
+
+
 
 (defparameter *guard-test-data* "[1518-11-01 00:00] Guard #10 begins shift
 [1518-11-01 00:05] falls asleep
@@ -215,63 +218,67 @@
         #'< :key #'(lambda (x)
                      (local-time:timestamp-to-unix (car x)))))
 
-(defun day-4-1 ()
+(defun day4-1 ()
   (labels ((range (min max)
-             (loop for n from min below (+ 1 max) by 1
-                   collect n)))
-    (let ((current-guard nil)
-          (guard-asleep-timestamp nil)
-          (results (make-hash-table :test 'equal)))
+                (loop for n from min below (+ 1 max) by 1
+                      collect n)))
+       (let ((current-guard nil)
+             (guard-asleep-timestamp nil)
+             (results (make-hash-table :test 'equal)))
       
-      (dolist (current (parse-day4-data))
-        (destructuring-bind (timestamp description) current
-          (cond
-            ((ppcre:scan "begins shift" description)
-             (setf current-guard (guard-number-from-string description)))
+         (dolist (current (parse-day4-data))
+           (destructuring-bind (timestamp description) current
+             (cond
+               ((ppcre:scan "begins shift" description)
+                (setf current-guard (guard-number-from-string description)))
 
-            ((ppcre:scan "falls asleep" description)
-             (setf guard-asleep-timestamp timestamp))
+               ((ppcre:scan "falls asleep" description)
+                (setf guard-asleep-timestamp timestamp))
 
-            ((ppcre:scan "wakes up" description)
-             (let ((old-results (gethash current-guard results nil))
-                   (new-results (range (parse-integer (format-date guard-asleep-timestamp (list :min)))
-                                       (parse-integer (format-date timestamp (list :min))))))
-               (setf (gethash current-guard results)
-                     (append old-results new-results))
-               (setf guard-asleep-timestamp nil))))))
+               ((ppcre:scan "wakes up" description)
+                (let ((old-results (gethash current-guard results nil))
+                      (new-results (range (parse-integer (format-date guard-asleep-timestamp (list :min)))
+                                          (parse-integer (format-date timestamp (list :min))))))
+                  (setf (gethash current-guard results)
+                        (append old-results new-results))
+                  (setf guard-asleep-timestamp nil))))))
 
-      
-      (let ((part-1-result (destructuring-bind (guard (minute count) total-hours-slept)
-                               (car (sort (mapcar (lambda (guard)
-                                                    (let ((minutes (gethash guard results)))
-                                                      (list guard
-                                                            (car (sort (mapcar (lambda (minute)
-                                                                                 (list minute (count minute minutes)))
-                                                                               (remove-duplicates minutes))
-                                                                       #'> :key #'cadr))
-                                                            (length minutes))))
-                                                  (hash-table-keys results))
-                                          #'> :key #'caddr))
-                             (declare (ignore count total-hours-slept))
-                             (* guard minute)))
-            (part-2-result
-              (destructuring-bind (guard (minute xcount))
-                  (car (sort (mapcar (lambda (guard)
-                                       (let* ((minutes (gethash guard results))
-                                              (unique-minutes (remove-duplicates minutes)))
-                                         (list guard
-                                               (car (sort (mapcar (lambda (minute)
-                                                                    (list minute (count minute minutes)))
-                                                                  unique-minutes)
-                                                          #'> :key #'cadr)))))
-                                     (hash-table-keys results))
-                             #'> :key #'cadadr))
-                (declare (ignore xcount))
-                (* guard minute))))
-        (list part-1-result part-2-result)))))
+         (let ((part-1-result (destructuring-bind (guard (minute count) total-hours-slept)
+                                  (car (sort (mapcar (lambda (guard)
+                                                       (let ((minutes (gethash guard results)))
+                                                         (list guard
+                                                               (car (sort (mapcar (lambda (minute)
+                                                                                    (list minute (count minute minutes)))
+                                                                                  (remove-duplicates minutes))
+                                                                          #'> :key #'cadr))
+                                                               (length minutes))))
+                                                     (hash-table-keys results))
+                                             #'> :key #'caddr))
+                                (declare (ignore count total-hours-slept))
+                                (* guard minute)))
+               (part-2-result
+                 (destructuring-bind (guard (minute xcount))
+                     (car (sort (mapcar (lambda (guard)
+                                          (let* ((minutes (gethash guard results))
+                                                 (unique-minutes (remove-duplicates minutes)))
+                                            (list guard
+                                                  (car (sort (mapcar (lambda (minute)
+                                                                       (list minute (count minute minutes)))
+                                                                     unique-minutes)
+                                                             #'> :key #'cadr)))))
+                                        (hash-table-keys results))
+                                #'> :key #'cadadr))
+                   (declare (ignore xcount))
+                   (* guard minute))))
+           (pprint
+            (list part-1-result part-2-result))))))
 
 (defun strip (string)
   (ppcre:regex-replace-all "\\n" string ""))
+
+
+
+
 
 (defparameter *day5-test-data* "dabAcCaCBAcCcaDA")
 
@@ -312,9 +319,10 @@
           (return-from react-polymer new-polymer)
           (setf polymer new-polymer)))))
 
-(defun day-5-1 ()
-  (length
-   (react-polymer (ppcre:regex-replace-all "\\n" *day5-real-data* ""))))
+(defun day5-1 ()
+  (pprint
+   (length
+    (react-polymer (ppcre:regex-replace-all "\\n" *day5-real-data* "")))))
 
 (defun clean-polymer (char polymer)
   (let ((ugh (ppcre:regex-replace-all (format nil "~a" char) polymer "")))
@@ -322,11 +330,16 @@
                                                (format nil "~a" char)))
                              ugh "")))
 
-(defun day-5-2 ()
-  (car (sort (mapcar (lambda (char)
-                       (length (react-polymer (clean-polymer char *day5-real-data*))))
-                     (coerce "abcdefghijklmnopqrstuvxyzw" 'list))
-             #'<)))
+(defun day5-2 ()
+  (pprint
+   (car (sort (mapcar (lambda (char)
+                        (length (react-polymer (clean-polymer char *day5-real-data*))))
+                      (coerce "abcdefghijklmnopqrstuvxyzw" 'list))
+              #'<))))
+
+
+
+
 
 (defparameter *day6-test-data* "1, 1
 1, 6
@@ -446,6 +459,9 @@
             (setf results (append results (list (list x y distances))))))))
     (length results)))
 
+
+
+
 (defparameter *day7-test-data* "Step C must be finished before step A can begin.
 Step C must be finished before step F can begin.
 Step A must be finished before step B can begin.
@@ -453,6 +469,7 @@ Step A must be finished before step D can begin.
 Step B must be finished before step E can begin.
 Step D must be finished before step E can begin.
 Step F must be finished before step E can begin.")
+
 (defparameter *day7-real-data* (alexandria:read-file-into-string "steps.txt"))
 
 (defun parse-steps (string)
@@ -505,13 +522,11 @@ Step F must be finished before step E can begin.")
     (interpret first-step steps output)
     (pprint (get-output-stream-string output))))
 
-(defparameter
-    +letters+
-  (mapcar (lambda (x)
-            (string-upcase (format nil "~a" x)))
-          (loop with a = (char-code #\a)
-                for i below 26
-                collect (code-char (+ a i)))))
+(defparameter +letters+ (mapcar (lambda (x)
+                                  (string-upcase (format nil "~a" x)))
+                                (loop with a = (char-code #\a)
+                                      for i below 26
+                                      collect (code-char (+ a i)))))
 
 (defun value-of-char (char)
   ;; for real data, add (+ 60 ..)
@@ -612,51 +627,6 @@ Step F must be finished before step E can begin.")
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ;;
 ;; [before starting day8]
 ;;
@@ -666,6 +636,20 @@ Step F must be finished before step E can begin.")
 ;;
 
 
-(defparameter +day8-test-data+ (list "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2"))
+(defparameter +day8-test-data+ "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2")
 (defun +day8-real-data* (strip (read-file-into-string "nodes.txt")))
 
+;; Something tells me I'm going to be making a lot of these.
+;; It's probably best to start now giving them consistent names.
+(defun p-take-until (stream char)
+  "Read from the stream until char consuming char."
+  (declare (type character char)
+           (type stream stream))
+  (loop for i = (read-char stream)
+           until (char= i char)
+           collect i))
+
+
+(defun test ()
+  (let ((stream (make-string-input-stream +day8-test-data+)))
+    (p-take-until stream #\Space)))
