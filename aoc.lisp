@@ -637,19 +637,61 @@ Step F must be finished before step E can begin.")
 
 
 (defparameter +day8-test-data+ "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2")
-(defun +day8-real-data* (strip (read-file-into-string "nodes.txt")))
 
-;; Something tells me I'm going to be making a lot of these.
-;; It's probably best to start now giving them consistent names.
-(defun p-take-until (stream char)
+(defparameter +day8-real-data+ (strip (read-file-into-string "nodes.txt")))
+
+(defun take-until (stream char)
   "Read from the stream until char consuming char."
   (declare (type character char)
            (type stream stream))
-  (loop for i = (read-char stream)
-           until (char= i char)
-           collect i))
+  (loop for i = (read-char stream nil nil)
+        until (or (not i)
+                  (char= i char))
+        collect i))
 
+(defun take-number (stream)
+  (when-let ((numbers (take-until stream #\Space)))
+    (parse-integer (format nil "~{~}" "~A" numbers))))
 
-(defun test ()
-  (let ((stream (make-string-input-stream +day8-test-data+)))
-    (p-take-until stream #\Space)))
+(defclass node ()
+  ((children-count :initarg :children-count
+                   :type integer
+                   :accessor node-children-count)
+   (metadata-count :initarg :metadata-count
+                   :type integer
+                   :accessor node-metadata-count)
+   (children :initarg :children
+             :type list
+             :accessor node-children)
+   (metadata :initarg :metadata
+             :type list
+             :accessor node-metadata)))
+
+(defun read-nodes (stream)
+  (let* ((children-count (take-number stream))
+         (metadata-count (take-number stream)))
+    (let ((children (mapcar (lambda (i)
+                              (declare (ignore i))
+                              (read-nodes stream))
+                            (range 0 children-count)))
+          (metadata (mapcar (lambda (i)
+                              (declare (ignore i))
+                              (take-number stream))
+                            (range 0 metadata-count))))
+      (make-instance 'node
+                     :children-count children-count
+                     :metadata-count metadata-count
+                     :children children
+                     :metadata metadata))))
+
+(defun reduce-to-metadata (node)
+  (list (node-metadata node)
+        (mapcar #'reduce-to-metadata
+                (node-children node))))
+
+(defun day8-1 ()
+  (let* ((stream (make-string-input-stream +day8-real-data+))
+         (nodes (read-nodes stream)))
+    (reduce #'+ (flatten (remove-if #'null
+                                    (reduce-to-metadata nodes))))))
+
