@@ -625,8 +625,6 @@ Step F must be finished before step E can begin.")
 
 
 
-
-
 ;;
 ;; [before starting day8]
 ;;
@@ -634,7 +632,6 @@ Step F must be finished before step E can begin.")
 ;; where applicable from here on. stmx is the
 ;; go-to software transactional memory implementation
 ;;
-
 
 (defparameter +day8-test-data+ "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2")
 
@@ -653,20 +650,6 @@ Step F must be finished before step E can begin.")
   (when-let ((numbers (take-until stream #\Space)))
     (parse-integer (format nil "~{~}" "~A" numbers))))
 
-(defclass node ()
-  ((children-count :initarg :children-count
-                   :type integer
-                   :accessor node-children-count)
-   (metadata-count :initarg :metadata-count
-                   :type integer
-                   :accessor node-metadata-count)
-   (children :initarg :children
-             :type list
-             :accessor node-children)
-   (metadata :initarg :metadata
-             :type list
-             :accessor node-metadata)))
-
 (defun read-nodes (stream)
   (let* ((children-count (take-number stream))
          (metadata-count (take-number stream)))
@@ -678,20 +661,38 @@ Step F must be finished before step E can begin.")
                               (declare (ignore i))
                               (take-number stream))
                             (range 0 metadata-count))))
-      (make-instance 'node
-                     :children-count children-count
-                     :metadata-count metadata-count
-                     :children children
-                     :metadata metadata))))
+      (list children-count metadata-count children metadata))))
 
 (defun reduce-to-metadata (node)
-  (list (node-metadata node)
-        (mapcar #'reduce-to-metadata
-                (node-children node))))
+  (destructuring-bind ((child-count metadata-count) children metadata) node
+    (declare (ignore metadata-count child-count))
+    (list metadata
+          (mapcar #'reduce-to-metadata children))))
 
 (defun day8-1 ()
   (let* ((stream (make-string-input-stream +day8-real-data+))
          (nodes (read-nodes stream)))
     (reduce #'+ (flatten (remove-if #'null
                                     (reduce-to-metadata nodes))))))
+
+;; At some point I'm going to remember about 0-indexed lists
+;; before I'm 5 hours into debugging something
+(defun score-node (node)
+  (destructuring-bind (children-count metadata-count children metadata) node
+    (declare (ignore metadata-count))
+    (if (or (= 0 children-count)
+            (null children))
+      (reduce #'+ metadata)
+      (mapcar (lambda (meta)
+                (if-let ((child (nth (- meta 1) children)))
+                  (score-node child)
+                  0))
+              metadata))))
+
+(defun day8-2 ()
+  (reduce #'+
+          (flatten
+           (score-node
+            (read-nodes
+             (make-string-input-stream +day8-real-data+))))))
 
