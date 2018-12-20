@@ -675,8 +675,6 @@ Step F must be finished before step E can begin.")
     (reduce #'+ (flatten (remove-if #'null
                                     (reduce-to-metadata nodes))))))
 
-;; At some point I'm going to remember about 0-indexed lists
-;; before I'm 5 hours into debugging something
 (defun score-node (node)
   (destructuring-bind (children-count metadata-count children metadata) node
     (declare (ignore metadata-count))
