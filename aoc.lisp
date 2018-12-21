@@ -441,8 +441,6 @@
                            unbounded-pairs)
                    #'> :key #'cadr))))))
 
-(x y)
-
 (defun calculate-distances (x y pairs)
   (mapcar (lambda (pair)
             (distance pair x y))
@@ -629,13 +627,7 @@ Step F must be finished before step E can begin.")
 
 
 
-;;
-;; [before starting day8]
-;;
-;; I'm going to try to use stmx and lparallel
-;; where applicable from here on. stmx is the
-;; go-to software transactional memory implementation
-;;
+
 
 (defparameter +day8-test-data+ "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2")
 
@@ -726,12 +718,15 @@ Step F must be finished before step E can begin.")
 (defparameter *day9-real-data* (list 463 71787))
 
 (defclass game ()
-  ((marble :initarg :marble
-           :accessor game-marble)
-   (round :initarg :round
-          :accessor game-round)
+  ((round :initarg :round
+          :accessor game-round
+          :initform 0)
+   (position :initarg :position
+             :accessor game-position
+             :initform 0)
    (player :initarg :player
-           :accessor game-player)
+           :accessor game-player
+           :initform 0)
    (circle :initarg :circle
            :accessor game-circle)
    (scores :initarg :scores
@@ -744,53 +739,48 @@ Step F must be finished before step E can begin.")
     (setf (aref vector b) val-a))
   vector)
 
-(defmethod shift-marbles ((game game))
-  (with-slots (circle marble round) game
-    (cond
-      ((< (+ 2 round) (fill-pointer circle))
-       (progn
-         (setf circle (vector-swap circle (+ 2 round) marble))))
-      ((> (+ 2 round) (fill-pointer circle))
-       (let ((new-index (- (+ 2 round) (fill-pointer circle))))
-         ;;(log:info "wrap")
-         (setf circle (vector-swap circle new-index marble)))))))
-
-(defun vector-shift (vector i val)
+(defun vector-shift-add (vector position value)
   (let ((new (make-array (1+ (length vector)) :element-type 'fixnum)))
-    (setf (aref new i) val)
-    (replace new vector :end1 i)
-    (replace new vector :start1 (1+ i) :start2 i)))
+    (setf (aref new position) value)
+    (replace new vector :end1 position)
+    (replace new vector :start1 (+ 1 position) :start2 position)))
+
+(defmethod shift-player ((game game))
+  (with-slots (player scores) game
+    (cond
+      ((= player (length scores))
+       (setf player 1))
+      (t (setf player (+ 1 player))))))
+
+(defmethod shift-marbles ((game game))
+  (with-slots (circle round position scores player) game
+    (cond
+      ((<= (+ 2 position) (length circle))
+       (progn
+         (setf position (+ 2 position))
+         (setf circle (vector-shift-add circle position round))))
+      
+      (t (progn
+           (setf position (- (+ 2 position) (length circle)))
+           (setf circle (vector-shift-add circle position round)))))))
 
 (defun run-board (last-marble-worth game)
-  (with-slots (circle scores round player marble) game
-
-    (log:info "~a" circle)
-    (vector-push-extend round circle)
-    (shift-marbles game)
-    (log:info "~a" circle)
-
-    
-    (if (<= (+ 1 player)
-            (car (array-dimensions scores)))
-      (setf player (+ 1 player))
-      (setf player 1))
-    
-    (setf round (+ 1 round))
-    (setf marble (+ 1 marble))
-    
-    (unless (= round 16)
-      (run-board last-marble-worth game))))
+  (log:info "pl:~a po:~a r:~a ~a"
+            (game-player game)
+            (game-position game)
+            (game-round game)
+            (game-circle game))
+  (shift-player game)
+  (setf (game-round game) (+ 1 (game-round game)))
+  (shift-marbles game)
+  (unless (< 12 (game-round game))
+    (run-board last-marble-worth game)))
 
 (defun day9-1 ()
   (run-board 32 (make-instance 'game
-                               :round 1
-                               :marble 0
-                               :player 0
                                :circle (make-array (list 1)
-                                                   :initial-element 0
-                                                   :fill-pointer t
-                                                   :adjustable t)
+                                                   ;; :initial-element 0
+                                                   ;; :fill-pointer t
+                                                   ;; :adjustable t
+                                                   )
                                :scores (make-array (list 9)))))
-
-
-
