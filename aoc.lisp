@@ -1,13 +1,12 @@
 ;; -*- mode: Lisp; Syntax: common-lisp; Package: aoc; Base: 10 -*-
 
+
 (defpackage :aoc
   (:use :cl
-   :alexandria)
-  (:import-from :alexandria :when-let :flatten :alist-hash-table :hash-table-keys :read-file-into-string))
+        :goldlists)
+  (:import-from :alexandria :when-let :if-let :alist-hash-table :hash-table-keys :read-file-into-string))
 
 (in-package :aoc)
-
-
 
 (defun range (min max)
   (loop for n from min below max by 1
@@ -51,14 +50,14 @@
           (setf threes (+ threes box-threes))))
       (format t "~a" (* twos threes)))))
 
-(defun day1-2 (&key (result-table (make-hash-table)) (result 0))
-  (dolist (current (read-aoc-data "day1.txt"))
-    (let ((temp-result (+ result (read-from-string current))))
-      (when (gethash temp-result result-table)
-        (return-from day1-2 temp-result))
-      (setf (gethash temp-result result-table) 1)
-      (setf result temp-result)))
-  (day1-2 :result-table result-table :result result))
+;; (defun day1-2 (&key (result-table (make-hash-table)) (result 0))
+;;   (dolist (current (read-aoc-data "day1.txt"))
+;;     (let ((temp-result (+ result (read-from-string current))))
+;;       (when (gethash temp-result result-table)
+;;         (return-from day1-2 temp-result))
+;;       (setf (gethash temp-result result-table) 1)
+;;       (setf result temp-result)))
+;;   (day1-2 :result-table result-table :result result))
 
 (defun day2-2 ()
   (flet ((box-id-sort-fn (a b result-table)
@@ -717,70 +716,133 @@ Step F must be finished before step E can begin.")
 ;; 463 players; last marble is worth 71787 points
 (defparameter *day9-real-data* (list 463 71787))
 
-(defclass game ()
-  ((round :initarg :round
-          :accessor game-round
-          :initform 0)
-   (position :initarg :position
-             :accessor game-position
-             :initform 0)
-   (player :initarg :player
-           :accessor game-player
-           :initform 0)
-   (circle :initarg :circle
-           :accessor game-circle)
-   (scores :initarg :scores
-           :accessor game-scores)))
+(defstruct (game (:type list))
+  (round 0 :type integer)
+  (last-marble 0 :type integer)
+  (position 0 :type integer)
+  (player 0 :type integer)
+  circle
+  scores)
 
+;; (defclass game ()
+;;   ((round :initarg :round
+;;           :accessor game-round
+;;           :type integer
+;;           :initform 0)
+;;    (last-marble :initarg :last-marble
+;;                 :accessor game-last-marble
+;;                 :type integer
+;;                 :initform (error "last-marble is required."))
+;;    (position :initarg :position
+;;              :accessor game-position
+;;              :type integer
+;;              :initform 0)
+;;    (player :initarg :player
+;;            :accessor game-player
+;;            :type integer
+;;            :initform 0)
+;;    (circle :initarg :circle
+;;            :accessor game-circle
+;;            :type array)
+;;    (scores :initarg :scores
+;;            :type array
+;;            :accessor game-scores)))
+
+
+(declaim (inline vector-drop))
+(defun vector-drop (vector position)
+  (declare (optimize (debug 0) (speed 3) (space 3))
+           (type (integer 1) position)
+           (vector vector))
+  (let ((new-array (make-array (- (array-dimension vector 0) 1)
+                               :element-type 'fixnum)))
+    (locally (declare (vector new-array))
+      (replace new-array vector :end1 position)
+      (replace new-array vector :start1 position :start2 (+ 1 position)))))
+
+(declaim (inline vector-swap))
 (defun vector-swap (vector a b)
   "Swap the values at index a and b."
+  (declare (optimize (debug 0) (speed 3) (space 3))
+           (type integer a b)
+           (type (simple-vector) vector))
   (let ((val-a (aref vector a)))
     (setf (aref vector a) (aref vector b))
     (setf (aref vector b) val-a))
   vector)
 
+(declaim (inline vector-shift-add))
 (defun vector-shift-add (vector position value)
-  (let ((new (make-array (1+ (length vector)) :element-type 'fixnum)))
-    (setf (aref new position) value)
-    (replace new vector :end1 position)
-    (replace new vector :start1 (+ 1 position) :start2 position)))
+  (declare (optimize (debug 0) (speed 3) (safety 1) (space 3))
+           (vector vector))
+  (let ((new (make-array (+ 1 (array-dimension vector 0)) :element-type 'fixnum)))
+    (locally (declare (vector new))
+      (setf (aref new position) value)
+      (replace new vector :end1 position)
+      (replace new vector :start1 (+ 1 position) :start2 position))))
 
-(defmethod shift-player ((game game))
-  (with-slots (player scores) game
-    (cond
-      ((= player (length scores))
-       (setf player 1))
-      (t (setf player (+ 1 player))))))
+(defun shift-player (game)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
+  (if (= (game-player game) (length (game-scores game)))
+    (setf (game-player game) 1)
+    (setf (game-player game) (+ 1 (game-player game)))))
 
-(defmethod shift-marbles ((game game))
-  (with-slots (circle round position scores player) game
-    (cond
-      ((<= (+ 2 position) (length circle))
-       (progn
-         (setf position (+ 2 position))
-         (setf circle (vector-shift-add circle position round))))
-      
-      (t (progn
-           (setf position (- (+ 2 position) (length circle)))
-           (setf circle (vector-shift-add circle position round)))))))
+(defun find-seven-back (game)
+  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
+  (let ((result (if (<= 7 (game-position game))
+                  (- (game-position game) 7)
+                  (- (length (game-circle game))
+                     (abs (- (game-position game) 7))))))
+    result))
 
-(defun run-board (last-marble-worth game)
-  (log:info "pl:~a po:~a r:~a ~a"
-            (game-player game)
-            (game-position game)
-            (game-round game)
-            (game-circle game))
+(defun shift-marbles (game)
+  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
+  (cond ((and (< 1 (game-round game))
+              (= 0 (mod (game-round game) 23)))
+         ;; "the current player keeps the marble they
+         ;; would have placed, adding it to their score."
+         (let* ((marble-seven-back (find-seven-back game))
+                (score (+ (game-round game) (aref (game-circle game) marble-seven-back))))
+           ;; "In addition, the marble 7 marbled counter-clockwise
+           ;; from the current marble is removed from the circle
+           ;; and also added to the current players score." (line above)
+           (setf (game-circle game) (vector-drop (game-circle game) marble-seven-back))
+           ;; "The marble located immediately clockwise of the marble
+           ;; that was removed is the new current marble."
+           (setf (game-position game) marble-seven-back)
+           (setf (aref (game-scores game)
+                       (- (game-player game) 1))
+                 (+ score (aref (game-scores game)
+                                (- (game-player game) 1))))))
+        (t (cond
+             ((<= (+ 2 (game-position game)) (length (game-circle game)))
+              (progn
+                (setf (game-position game) (+ 2 (game-position game)))
+                (setf (game-circle game)
+                      (vector-shift-add (game-circle game) (game-position game) (game-round game)))))
+             
+             (t (progn
+                  (setf (game-position game) (- (+ 2 (game-position game)) (length (game-circle game))))
+                  (setf (game-circle game)
+                        (vector-shift-add (game-circle game) (game-position game) (game-round game)))))))))
+
+(defun run-board (game)
+  (declare (optimize (debug 0) (speed 3) (space 3)))
+  
   (shift-player game)
   (setf (game-round game) (+ 1 (game-round game)))
-  (shift-marbles game)
-  (unless (< 12 (game-round game))
-    (run-board last-marble-worth game)))
+  (shift-marbles game))
 
 (defun day9-1 ()
-  (run-board 32 (make-instance 'game
-                               :circle (make-array (list 1)
-                                                   ;; :initial-element 0
-                                                   ;; :fill-pointer t
-                                                   ;; :adjustable t
-                                                   )
-                               :scores (make-array (list 9)))))
+  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
+  (let ((game (make-game :last-marble  71787 ;; (* 100 71787)
+                         :scores (make-array (list 463)
+                                             :initial-element 0
+                                             :element-type 'integer)
+                         :circle (make-array (list 1)
+                                             :initial-element 0
+                                             :element-type 'integer))))
+    (dotimes (i 71787)
+      (run-board game))
+    
+    (reduce #'max (game-scores game))))

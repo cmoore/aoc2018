@@ -8,6 +8,7 @@
                :cl-ppcre
                :local-time
                :log4cl
+               :lparallel
                :array-operations)
   
   :components ((:file "aoc")))
