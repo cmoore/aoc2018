@@ -214,7 +214,7 @@
                                              (pad-value hour)
                                              (pad-value minute)))))
                     (list timestamp (format nil "~{~a~^ ~}" sentence))))
-                (read-aoc-data "/home/cmoore/quicklisp/local-projects/aoc2018/guards.txt"))
+                (read-aoc-data "guards.txt"))
         #'< :key #'(lambda (x)
                      (local-time:timestamp-to-unix (car x)))))
 
@@ -425,7 +425,7 @@
              (remove-duplicates (bounding-box-values board))))
 
 (defun day6-1 ()
-  (let* ((pairs (make-pairs *day6-real-data*))
+  (let* ((pairs (make-pairs *day6-test-data*))
          (board (make-board pairs)))
     (let ((cell-values (plot-owners board pairs)))
       (let* ((bounding-pairs (get-bounding-pairs board))
@@ -435,10 +435,13 @@
              (new-cell-values (remove-if (lambda (x)
                                            (equal x "."))
                                          cell-values)))
+        (pprint cell-values)
         (car (sort (mapcar (lambda (unbound-pair)
                              (list unbound-pair (count unbound-pair new-cell-values :test #'equalp)))
                            unbounded-pairs)
                    #'> :key #'cadr))))))
+
+(x y)
 
 (defun calculate-distances (x y pairs)
   (mapcar (lambda (pair)
@@ -446,7 +449,7 @@
           pairs))
 
 (defun day6-2 ()
-  (let* ((pairs (make-pairs *day6-real-data*))
+  (let* ((pairs (make-pairs *day6-test-data*))
          (threshold 10000)
          (board (make-board pairs))
          (board-size (car (array-dimensions board)))
@@ -457,6 +460,7 @@
         (let ((distances (reduce #'+ (calculate-distances x y pairs))))
           (when (<= distances threshold)
             (setf results (append results (list (list x y distances))))))))
+    (pprint board)
     (length results)))
 
 
@@ -670,10 +674,9 @@ Step F must be finished before step E can begin.")
           (mapcar #'reduce-to-metadata children))))
 
 (defun day8-1 ()
-  (let* ((stream (make-string-input-stream +day8-real-data+))
-         (nodes (read-nodes stream)))
-    (reduce #'+ (flatten (remove-if #'null
-                                    (reduce-to-metadata nodes))))))
+  (let ((nodes (read-nodes (make-string-input-stream +day8-real-data+))))
+    (reduce #'+ (flatten
+                 (remove-if #'null (reduce-to-metadata nodes))))))
 
 (defun score-node (node)
   (destructuring-bind (children-count metadata-count children metadata) node
@@ -693,4 +696,101 @@ Step F must be finished before step E can begin.")
            (score-node
             (read-nodes
              (make-string-input-stream +day8-real-data+))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; 463 players; last marble is worth 71787 points
+(defparameter *day9-real-data* (list 463 71787))
+
+(defclass game ()
+  ((marble :initarg :marble
+           :accessor game-marble)
+   (round :initarg :round
+          :accessor game-round)
+   (player :initarg :player
+           :accessor game-player)
+   (circle :initarg :circle
+           :accessor game-circle)
+   (scores :initarg :scores
+           :accessor game-scores)))
+
+(defun vector-swap (vector a b)
+  "Swap the values at index a and b."
+  (let ((val-a (aref vector a)))
+    (setf (aref vector a) (aref vector b))
+    (setf (aref vector b) val-a))
+  vector)
+
+(defmethod shift-marbles ((game game))
+  (with-slots (circle marble round) game
+    (cond
+      ((< (+ 2 round) (fill-pointer circle))
+       (progn
+         (setf circle (vector-swap circle (+ 2 round) marble))))
+      ((> (+ 2 round) (fill-pointer circle))
+       (let ((new-index (- (+ 2 round) (fill-pointer circle))))
+         ;;(log:info "wrap")
+         (setf circle (vector-swap circle new-index marble)))))))
+
+(defun vector-shift (vector i val)
+  (let ((new (make-array (1+ (length vector)) :element-type 'fixnum)))
+    (setf (aref new i) val)
+    (replace new vector :end1 i)
+    (replace new vector :start1 (1+ i) :start2 i)))
+
+(defun run-board (last-marble-worth game)
+  (with-slots (circle scores round player marble) game
+
+    (log:info "~a" circle)
+    (vector-push-extend round circle)
+    (shift-marbles game)
+    (log:info "~a" circle)
+
+    
+    (if (<= (+ 1 player)
+            (car (array-dimensions scores)))
+      (setf player (+ 1 player))
+      (setf player 1))
+    
+    (setf round (+ 1 round))
+    (setf marble (+ 1 marble))
+    
+    (unless (= round 16)
+      (run-board last-marble-worth game))))
+
+(defun day9-1 ()
+  (run-board 32 (make-instance 'game
+                               :round 1
+                               :marble 0
+                               :player 0
+                               :circle (make-array (list 1)
+                                                   :initial-element 0
+                                                   :fill-pointer t
+                                                   :adjustable t)
+                               :scores (make-array (list 9)))))
+
+
 
