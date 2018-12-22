@@ -3,8 +3,12 @@
 
 (defpackage :aoc
   (:use :cl
+        :sketch
         :goldlists)
-  (:import-from :alexandria :when-let :if-let :alist-hash-table :hash-table-keys :read-file-into-string))
+  (:import-from :alexandria :when-let
+                :if-let :alist-hash-table
+                :hash-table-keys :read-file-into-string
+                :flatten))
 
 (in-package :aoc)
 
@@ -690,159 +694,210 @@ Step F must be finished before step E can begin.")
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ;; 463 players; last marble is worth 71787 points
 (defparameter *day9-real-data* (list 463 71787))
 
-(defstruct (game (:type list))
-  (round 0 :type integer)
-  (last-marble 0 :type integer)
-  (position 0 :type integer)
-  (player 0 :type integer)
-  circle
-  scores)
+(defclass game ()
+  ((round :initarg :round
+          :accessor game-round
+          :type integer
+          :initform 0)
+   (player :initarg :player
+           :accessor game-player
+           :type integer
+           :initform 0)
+   (circle :initarg :circle
+           :accessor game-circle)
+   (scores :initarg :scores
+           :type array
+           :accessor game-scores)))
 
-;; (defclass game ()
-;;   ((round :initarg :round
-;;           :accessor game-round
-;;           :type integer
-;;           :initform 0)
-;;    (last-marble :initarg :last-marble
-;;                 :accessor game-last-marble
-;;                 :type integer
-;;                 :initform (error "last-marble is required."))
-;;    (position :initarg :position
-;;              :accessor game-position
-;;              :type integer
-;;              :initform 0)
-;;    (player :initarg :player
-;;            :accessor game-player
-;;            :type integer
-;;            :initform 0)
-;;    (circle :initarg :circle
-;;            :accessor game-circle
-;;            :type array)
-;;    (scores :initarg :scores
-;;            :type array
-;;            :accessor game-scores)))
-
-
-(declaim (inline vector-drop))
 (defun vector-drop (vector position)
-  (declare (optimize (debug 0) (speed 3) (space 3))
-           (type (integer 1) position)
-           (vector vector))
   (let ((new-array (make-array (- (array-dimension vector 0) 1)
                                :element-type 'fixnum)))
     (locally (declare (vector new-array))
       (replace new-array vector :end1 position)
       (replace new-array vector :start1 position :start2 (+ 1 position)))))
 
-(declaim (inline vector-swap))
 (defun vector-swap (vector a b)
   "Swap the values at index a and b."
-  (declare (optimize (debug 0) (speed 3) (space 3))
-           (type integer a b)
-           (type (simple-vector) vector))
   (let ((val-a (aref vector a)))
     (setf (aref vector a) (aref vector b))
     (setf (aref vector b) val-a))
   vector)
 
-(declaim (inline vector-shift-add))
 (defun vector-shift-add (vector position value)
-  (declare (optimize (debug 0) (speed 3) (safety 1) (space 3))
-           (vector vector))
   (let ((new (make-array (+ 1 (array-dimension vector 0)) :element-type 'fixnum)))
     (locally (declare (vector new))
       (setf (aref new position) value)
       (replace new vector :end1 position)
       (replace new vector :start1 (+ 1 position) :start2 position))))
 
-(defun shift-player (game)
-  (declare (optimize (debug 0) (speed 3) (space 3)))
-  (if (= (game-player game) (length (game-scores game)))
-    (setf (game-player game) 1)
-    (setf (game-player game) (+ 1 (game-player game)))))
+(defmethod shift-player ((game game))
+  (with-slots (player scores) game
+    (if (= player (length scores))
+      (setf player 1)
+      (setf player (+ 1 player)))))
 
-(defun find-seven-back (game)
-  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
-  (let ((result (if (<= 7 (game-position game))
-                  (- (game-position game) 7)
-                  (- (length (game-circle game))
-                     (abs (- (game-position game) 7))))))
-    result))
-
-(defun shift-marbles (game)
-  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
-  (cond ((and (< 1 (game-round game))
-              (= 0 (mod (game-round game) 23)))
-         ;; "the current player keeps the marble they
-         ;; would have placed, adding it to their score."
-         (let* ((marble-seven-back (find-seven-back game))
-                (score (+ (game-round game) (aref (game-circle game) marble-seven-back))))
-           ;; "In addition, the marble 7 marbled counter-clockwise
-           ;; from the current marble is removed from the circle
-           ;; and also added to the current players score." (line above)
-           (setf (game-circle game) (vector-drop (game-circle game) marble-seven-back))
-           ;; "The marble located immediately clockwise of the marble
-           ;; that was removed is the new current marble."
-           (setf (game-position game) marble-seven-back)
-           (setf (aref (game-scores game)
-                       (- (game-player game) 1))
-                 (+ score (aref (game-scores game)
-                                (- (game-player game) 1))))))
-        (t (cond
-             ((<= (+ 2 (game-position game)) (length (game-circle game)))
-              (progn
-                (setf (game-position game) (+ 2 (game-position game)))
-                (setf (game-circle game)
-                      (vector-shift-add (game-circle game) (game-position game) (game-round game)))))
-             
-             (t (progn
-                  (setf (game-position game) (- (+ 2 (game-position game)) (length (game-circle game))))
-                  (setf (game-circle game)
-                        (vector-shift-add (game-circle game) (game-position game) (game-round game)))))))))
+(defmethod shift-marbles ((game game))
+  (with-slots (round circle player scores) game
+    (cond ((and (< 1 round)
+                (= 0 (mod round 23)))
+           (let* ((new-circle (clist-rotate circle -7))
+                  (score (+ round (clist-focused new-circle))))
+             (setf circle (clist-remove-focused new-circle))
+             ;; "The marble located immediately clockwise of the marble
+             ;; that was removed is the new current marble."
+             (setf (aref scores (- player 1))
+                   (+ score (aref scores (- player 1))))))
+          (t (let ((new-circle (clist-insert (clist-rotate circle 2) round)))
+               (setf circle new-circle))))))
 
 (defun run-board (game)
-  (declare (optimize (debug 0) (speed 3) (space 3)))
-  
   (shift-player game)
   (setf (game-round game) (+ 1 (game-round game)))
   (shift-marbles game))
 
 (defun day9-1 ()
-  (declare (optimize (debug 0) (speed 3) (space 3) (safety 0)))
-  (let ((game (make-game :last-marble  71787 ;; (* 100 71787)
-                         :scores (make-array (list 463)
-                                             :initial-element 0
-                                             :element-type 'integer)
-                         :circle (make-array (list 1)
-                                             :initial-element 0
-                                             :element-type 'integer))))
-    (dotimes (i 71787)
+  (let ((game (make-instance 'game
+                             :scores (make-array (list 463)
+                                                 :initial-element 0
+                                                 :element-type 'integer)
+                             :circle (make-circular-list 0 :mutable t))))
+    (dotimes (i 7178700)
       (run-board game))
-    
     (reduce #'max (game-scores game))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(defparameter *day10-test-input* "9,1,0,2
+7,0,-1,0
+3,-2,-1,1
+6,10,-2,-1
+2,-4,2,2
+-6,10,2,-2
+1,8,1,-1
+1,7,1,0
+-3,11,1,-2
+7,6,-1,-1
+-2,3,1,0
+-4,3,2,0
+10,-3,-1,1
+5,11,1,-2
+4,7,0,-1
+8,-2,0,1
+15,0,-2,0
+1,6,1,0
+8,9,0,-1
+3,3,-1,1
+0,5,0,-1
+-2,2,2,0
+5,-2,1,2
+1,4,2,1
+-2,7,2,-2
+3,6,-1,-1
+5,0,1,0
+-6,0,2,0
+5,9,1,-2
+14,7,-2,0
+-3,6,2,-1")
+
+(defstruct (point (:type list))
+  p-x
+  p-y
+  v-x
+  v-y)
+
+(defun parse-input ()
+  (mapcar (lambda (x)
+            (destructuring-bind (x y vx vy)
+                (ppcre:split "," x)
+              (make-point :p-x (parse-integer x)
+                          :p-y (parse-integer y)
+                          :v-x (parse-integer vx)
+                          :v-y (parse-integer vy))))
+          (ppcre:split "\\n" *day10-test-input*)))
+
+;; (defun determine-board-size (points)
+;;   (let* ((xs (mapcar #'point-p-x points))
+;;          (ys (mapcar #'point-p-y points))
+;;          (size-x (+ (abs (reduce #'min xs))
+;;                     (reduce #'max xs)))
+;;          (size-y (+ (abs (reduce #'min ys))
+;;                     (reduce #'max ys))))
+;;     (list size-x size-y (abs (reduce #'min xs)) (abs (reduce #'min ys)))))
+
+
+;; (defun plot-point (board point)
+;;   (destructuring-bind (size-x size-y real-x real-y)
+;;       (determine-board-size points)
+;;     (declare (ignore size-x size-y))
+;;     (setf (aref board
+;;                 (+ (point-p-y point) real-y)
+;;                 (+ (point-p-x point) real-x))
+;;           0)))
+
+;; (defun test10 ()
+;;   (let ((points (parse-input)))
+;;     (destructuring-bind (size-x size-y real-x real-y)
+;;         (determine-board-size points))
+;;     (let ((board (make-array (list (+ 17 size-x) (+ 17 size-y))
+;;                              :initial-element 1)))
+;;       (mapcar (lambda (point)
+;;                 (setf (aref board 
+;;                             (+ (point-p-y point) real-y)
+;;                             (+ (point-p-x point) real-x))
+;;                       0))
+;;               points)
+;;       (pprint board))))
+
+
+(defsketch day10
+    ((title "day10") (width 400) (height 400)
+     (steps 0) (xs (/ width 5)) (r 3))
+  (incf steps)
+  (background (rgb 0.2 0.2 0.2))
+  
+  (flet ((sin-calc (x)
+           (sin (* +tau+ (/ (+ (/ steps 4) x) xs)))))
+    (dotimes (x xs)
+      (with-pen
+          (make-pen :fill (rgb 0 0 0)
+                    :stroke (gray 0.1))
+        ;; sides pos/pos  size/size rotation
+        (ngon 4 10 10   10 10  45)
+        ;; (ngon 6 (* x (/ width xs)) (+ (/ height 2) (* (/ height 4) (sin-calc x))) r r)
+        ;; (ngon 6 (* x (/ width xs)) (+ (/ height 2) (* (/ height 4) (sin-calc (- x)))) r r)
+        ;; (ngon 6 (* x (/ width xs)) (+ (/ height 2) (* (/ height 4) (- (sin-calc (- x))))) r r)
+        ;; (ngon 6 (* x (/ width xs)) (+ (/ height 2) (* (/ height 4) (- (sin-calc x)))) r r)
+        ))))
+
+
+
+;; (defsketch day10
+;;     ((title "day10") (width 400) (height 400)
+;;      (steps 0) (xs (/ width 5)) (r 3))
+;;   (incf steps)
+;;   (background (rgb 0.2 0.2 0.2))
+;;   (let ((w width) (h height))
+;;     (flet ((sin-calc (x)
+;;              (sin (* +tau+ (/ (+ (/ steps 4) x) xs)))))
+;;       (dotimes (x xs)
+;;         (with-pen
+;;             (make-pen :fill (rgb 0.2 0.2 0.2)
+;;                       :stroke (gray 0.1))
+;;           (ngon 6 (* x (/ w xs)) (+ (/ h 2) (* (/ h 4) (sin-calc x))) r r)
+;;           (ngon 6 (* x (/ w xs)) (+ (/ h 2) (* (/ h 4) (sin-calc (- x)))) r r)
+;;           (ngon 6 (* x (/ w xs)) (+ (/ h 2) (* (/ h 4) (- (sin-calc (- x))))) r r)
+;;           (ngon 6 (* x (/ w xs)) (+ (/ h 2) (* (/ h 4) (- (sin-calc x)))) r r))))))

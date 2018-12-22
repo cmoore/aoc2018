@@ -6,9 +6,12 @@
   
   :depends-on (:alexandria
                :cl-ppcre
+               :sketch
                :local-time
                :log4cl
                :lparallel
+               :iterate
                :array-operations)
   
-  :components ((:file "aoc")))
+  :components ((:file "goldlists")
+               (:file "aoc")))
